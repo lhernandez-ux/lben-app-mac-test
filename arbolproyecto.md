@@ -1,0 +1,44 @@
+# Estructura del Proyecto
+
+```text
+LBEn_APP_Resol016/
+├── README.md
+├── main.py
+├── requirements.txt
+├── contexto/
+│   ├── arbol.txt
+│   ├── exploracion/
+│   │   ├── exploracion.txt
+│   │   ├── plantilla_exploracion_modelo.xlsx
+│   │   ├── vistasexploracion.pdf
+├── tests/
+├── docs/
+├── assets/
+├── data/
+│   ├── plantilla_exploracion_modelo.xlsx
+├── core/
+│   ├── ajuste_nr.py
+│   ├── exploratorio.py
+│   ├── io_excel.py
+│   ├── models/
+│   │   ├── m1_absoluto.py
+│   │   ├── m2_cociente.py
+│   │   ├── m3_regresion.py
+├── ui/
+│   ├── app.py
+│   ├── theme.py
+│   ├── components/
+│   │   ├── __init__.py
+│   ├── pages/
+│   │   ├── exploratorio_carga.py
+│   │   ├── exploratorio_config.py
+│   │   ├── exploratorio_resultados.py
+│   │   ├── home.py
+│   │   ├── m1.py
+│   │   ├── m2.py
+│   │   ├── m3.py
+│   │   ├── monitoreo.py
+│   │   ├── seleccion_modelo.py
+├── state/
+│   ├── session.py
+```
