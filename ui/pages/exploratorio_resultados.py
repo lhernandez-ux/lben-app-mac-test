@@ -458,20 +458,27 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
     # ── Actualizar Excel ──────────────────────────────────────────────────────
     def _actualizar_excel(self):
-        from tkinter import filedialog
         from core.io_excel import escribir_resultados_exploratorios
+        sesion = self.app.session
 
-        if not self._resultados or not self._recomendacion:
+        if self._resultados is None or self._recomendacion is None:
             messagebox.showwarning(
                 "Sin resultados",
                 "Primero ejecuta el análisis antes de exportar."
             )
             return
 
-        path = filedialog.askopenfilename(
-            title="Seleccionar Excel exploratorio para actualizar",
-            filetypes=[("Excel", "*.xlsx")]
-        )
+        # Intentar obtener la ruta desde la sesión
+        path = sesion.get("excel_path")
+
+        # Si no hay ruta en sesión, pedir al usuario (fallback)
+        if not path:
+            from tkinter import filedialog
+            path = filedialog.askopenfilename(
+                title="Seleccionar Excel exploratorio para actualizar",
+                filetypes=[("Excel", "*.xlsx")]
+            )
+        
         if not path:
             return
 
@@ -487,7 +494,7 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         if ok:
             messagebox.showinfo(
                 "Excel actualizado",
-                "Los resultados fueron escritos correctamente en el Excel."
+                f"Resultados escritos correctamente en:\n{path}"
             )
 
     # ── Helpers ───────────────────────────────────────────────────────────────

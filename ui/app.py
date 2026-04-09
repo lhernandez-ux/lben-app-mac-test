@@ -74,5 +74,17 @@ class App(ctk.CTk):
             from ui.pages.seleccion_modelo import SeleccionModeloPage
             return SeleccionModeloPage(self)
 
+        elif destino == "m1_config":
+            from ui.pages.m1_config import M1ConfigPage
+            return M1ConfigPage(self)
+
+        elif destino == "m1_carga":
+            from ui.pages.m1_carga import M1CargaPage
+            return M1CargaPage(self)
+
+        elif destino == "m1_resultados":
+            from ui.pages.m1_resultados import M1ResultadosPage
+            return M1ResultadosPage(self)
+
         else:
             raise ValueError(f"Destino desconocido: {destino}")

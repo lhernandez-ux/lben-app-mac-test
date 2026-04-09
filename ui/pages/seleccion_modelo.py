@@ -58,7 +58,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             topbar,
-            text="Selecciona el modelo estadístico",
+            text="Selecciona el modelo de LBEn",
             font=(FONTS.family, FONTS.size_md, "bold"),
             text_color=COLORS.primary
         ).grid(row=0, column=1, sticky="w", padx=8)
@@ -87,8 +87,8 @@ class SeleccionModeloPage(ctk.CTkFrame):
         # Subtítulo
         ctk.CTkLabel(
             cuerpo,
-            text="Los modelos están ordenados de menor a mayor complejidad. "
-                 "Elige el que mejor se adapte a tus datos y objetivos.",
+            text="Elige el modelo que mejor se adapte a tus datos y objetivos."
+                 " Aparecerá resaltado el modelo recomendado en el ultimo análisis exploratorio",
             font=(FONTS.family, FONTS.size_sm),
             text_color=COLORS.text_secondary,
             justify="left"
@@ -103,41 +103,38 @@ class SeleccionModeloPage(ctk.CTkFrame):
         modelos = [
             {
                 "codigo":    "M1",
-                "icono":     "≡",
-                "titulo":    "Modelo de Promedio",
-                "subtitulo": "Consumo Absoluto",
+                "titulo":    "Consumo Absoluto",
+                "subtitulo": "Promedios Mensuales",
                 "descripcion": (
                     "Estima la línea base como el promedio del "
                     "consumo histórico mensual.\n\n"
                     "Ideal cuando el consumo es relativamente "
-                    "constante y no depende de variables externas."
+                    "constante y no depende o no se dispone de variables externas."
                 ),
                 "variables": "Solo consumo energético",
-                "recomendado_para": "Procesos continuos, clima estable",
-                "destino": "m1"
+                "recomendado_para": "Edificios con consumo estable",
+                "destino": "m1_config"
             },
             {
                 "codigo":    "M2",
-                "icono":     "÷",
                 "titulo":    "Modelo de Cociente",
                 "subtitulo": "Consumo Normalizado",
                 "descripcion": (
                     "Calcula un índice de consumo energético "
-                    "normalizado por una variable (Ej: kWh/persona).\n\n"
-                    "Útil cuando el consumo escala con una sola "
-                    "variable como producción o área."
+                    "normalizado por una variable (Ej: kWh/visitantes).\n\n"
+                    "Útil cuando el consumo escala proporcionalmente con una sola "
+                    "variable como usuarios o área."
                 ),
-                "variables": "Consumo + 1 variable de producción",
+                "variables": "Consumo + 1 variable",
                 "recomendado_para": "Edificios con ocupación variable",
-                "destino": "m2"
+                "destino": "m2_config"
             },
             {
                 "codigo":    "M3",
-                "icono":     "∿",
-                "titulo":    "Regresión Lineal",
-                "subtitulo": "Modelo Estadístico",
+                "titulo":    "Modelos Estadísticos",
+                "subtitulo": "Regresión Lineal",
                 "descripcion": (
-                    "Predice el consumo en función de una o más "
+                    "Calcula el consumo en función de una o más "
                     "variables independientes estadísticamente "
                     "significativas.\n\n"
                     "Puede detectar relaciones complejas entre "
@@ -145,16 +142,14 @@ class SeleccionModeloPage(ctk.CTkFrame):
                     "estadísticamente precisos."
                 ),
                 "variables": "Consumo + 1 o más variables significativas",
-                "recomendado_para": "Edificios con múltiples factores",
-                "destino": "m3"
+                "recomendado_para": "Edificios con múltiples factores o variables disponibles",
+                "destino": "m3_config"
             }
         ]
 
         for col, modelo in enumerate(modelos):
             es_rec = modelo["codigo"] == self._recomendacion
-            self._build_card_modelo(
-                cards_frame, modelo, col, es_rec
-            )
+            self._build_card_modelo(cards_frame, modelo, col, es_rec)
 
     # ── Card modelo ───────────────────────────────────────────────────────────
     def _build_card_modelo(self, parent, modelo, col, es_recomendado):
@@ -197,41 +192,47 @@ class SeleccionModeloPage(ctk.CTkFrame):
             sticky="nsew", pady=4
         )
         card.grid_columnconfigure(0, weight=1)
-        card.grid_rowconfigure(2, weight=1)
 
         # Badge recomendado
         if es_recomendado:
-            badge = ctk.CTkFrame(
-                card, fg_color=COLORS.accent,
-                corner_radius=12, height=24
-            )
-            badge.grid(row=0, column=0, padx=16, pady=(16, 0), sticky="w")
+            badge = ctk.CTkFrame(card, fg_color=COLORS.success, corner_radius=10, height=24)
+            badge.place(relx=1.0, x=-10, y=10, anchor="ne")
             ctk.CTkLabel(
-                badge,
-                text="  ✦ Recomendado  ",
-                font=(FONTS.family, FONTS.size_xs, "bold"),
-                text_color=COLORS.primary
-            ).pack(padx=4, pady=2)
+                badge, text="RECOMENDADO", 
+                font=(FONTS.family, 10, "bold"),
+                text_color="white", padx=10
+            ).pack()
         else:
             ctk.CTkFrame(
                 card, fg_color="transparent", height=24
-            ).grid(row=0, column=0, pady=(16, 0))
+            ).grid(row=0, column=0, padx=16, pady=(16, 0), sticky="w")
 
-        # Ícono
-        ctk.CTkLabel(
-            card,
-            text=modelo["icono"],
-            font=(FONTS.family, 42),
-            text_color=fg_icono
-        ).grid(row=1, column=0, pady=(12, 4))
+        # Ícono / Ilustración
+        from PIL import Image
+        import os
+        
+        modelo_id = modelo["codigo"]
+        icon_map = {"M1": "m1_icon.png", "M2": "m2_icon.png", "M3": "m3_icon.png"}
+        icon_path = os.path.join("assets", icon_map.get(modelo_id, "m1_icon.png"))
+        
+        try:
+            pil_img = Image.open(icon_path)
+            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(48, 48))
+            icon_label = ctk.CTkLabel(card, text="", image=ctk_img)
+            icon_label.grid(row=1, column=0, padx=16, pady=(8, 0), sticky="w")
+        except:
+            ctk.CTkLabel(
+                card, text="📊", font=(FONTS.family, 32),
+                text_color=fg_icono
+            ).grid(row=1, column=0, padx=16, pady=(8, 0), sticky="w")
 
         # Título
         ctk.CTkLabel(
             card,
             text=modelo["titulo"],
-            font=(FONTS.family, FONTS.size_lg, "bold"),
+            font=(FONTS.family, FONTS.size_md, "bold"),
             text_color=fg_titulo
-        ).grid(row=2, column=0, pady=(0, 2))
+        ).grid(row=2, column=0, padx=16, pady=(16, 0), sticky="w")
 
         # Subtítulo
         ctk.CTkLabel(
@@ -239,7 +240,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
             text=modelo["subtitulo"],
             font=(FONTS.family, FONTS.size_xs),
             text_color=fg_sub
-        ).grid(row=3, column=0, pady=(0, 12))
+        ).grid(row=3, column=0, padx=16, pady=(0, 12), sticky="w")
 
         # Separador
         ctk.CTkFrame(

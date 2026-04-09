@@ -138,15 +138,24 @@ def recomendar_modelo(resultados: list[dict]) -> dict:
     s = len(vars_sig)
 
     if s == 0:
+        if not resultados:
+            justificacion = (
+                "Se analizó únicamente el consumo histórico. "
+                "El modelo M1 construirá la línea base como el "
+                "promedio histórico del consumo mensual."
+            )
+        else:
+            justificacion = (
+                "No se detectaron variables estadísticamente significativas "
+                "(p < 0.05). El modelo M1 construirá la línea base como el "
+                "promedio histórico del consumo mensual."
+            )
+
         return {
             "modelo":      "M1",
             "codigo":      "M1",
-            "titulo":      "Modelo de Promedio (M1)",
-            "justificacion": (
-                "No se detectaron variables estadísticamente significativas "
-                f"(p < 0.05). El modelo M1 construirá la línea base como el "
-                "promedio histórico del consumo mensual."
-            ),
+            "titulo":      "Modelo de Consumo Absoluto (M1)",
+            "justificacion": justificacion,
             "vars_significativas": []
         }
     elif s == 1:

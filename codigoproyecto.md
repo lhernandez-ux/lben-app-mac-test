@@ -434,6 +434,8 @@ El módulo es correcto si:
 
 ```
 
+## Contexto / Consumo
+
 ## Core
 
 ### ajuste_nr.py
@@ -763,8 +765,8 @@ from openpyxl.utils import get_column_letter
 
 # ── Ruta a la plantilla base ──────────────────────────────────────────────────
 _DIR_DATA = os.path.join(os.path.dirname(__file__), "..", "data")
-_PLANTILLA_EXPLORATORIA = os.path.join(
-    _DIR_DATA, "plantilla_exploracion_modelo.xlsx"
+_PLANTILLA_M1 = os.path.join(
+    _DIR_DATA, "Plantilla_LBEn_M1_modelo.xlsx"
 )
 
 
@@ -818,6 +820,62 @@ def generar_plantilla_exploratoria(
         "Llena la hoja 'Periodo_Análisis' con tus datos y luego cárgala en la app."
     )
     return True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# B — GENERACIÓN DE PLANTILLA M1 (CONSUMO ABSOLUTO)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def generar_plantilla_m1(data: dict) -> bool:
+    """
+    Personaliza y guarda la plantilla para el Modelo M1.
+    data: {nombre, fuente, unidad, pb_ini, pb_fin, pr_ini, pr_fin}
+    """
+    if not os.path.exists(_PLANTILLA_M1):
+        messagebox.showerror("Error", f"No se encontró la plantilla M1 en:\n{_PLANTILLA_M1}")
+        return False
+
+    nombre_archivo = f"M1_{_limpiar_nombre(data['nombre'])}.xlsx"
+    ruta_destino = filedialog.asksaveasfilename(
+        title="Guardar plantilla M1",
+        initialfile=nombre_archivo,
+        defaultextension=".xlsx",
+        filetypes=[("Excel", "*.xlsx")]
+    )
+    if not ruta_destino: return False
+
+    shutil.copy2(_PLANTILLA_M1, ruta_destino)
+    wb = load_workbook(ruta_destino)
+    
+    _escribir_m1_identificacion(wb, data)
+    _escribir_m1_periodo_base(wb, data)
+    _escribir_m1_monitoreo(wb, data)
+    
+    wb.save(ruta_destino)
+    messagebox.showinfo("Éxito", f"Plantilla M1 generada en:\n{ruta_destino}")
+    return True
+
+def _escribir_m1_identificacion(wb, data):
+    """Escribe nombre, fuente y unidad en la hoja Modelo_LBEn."""
+    ws = wb["Modelo_LBEn"]
+    # Según usuario: D5, D6, D7
+    ws["D5"] = data["nombre"]
+    ws["D6"] = data["fuente"]
+    ws["D7"] = data["unidad"]
+
+def _escribir_m1_periodo_base(wb, data):
+    ws = wb["Período_Base"]
+    # B8 en adelante para fechas
+    fechas = _generar_fechas_mensuales(data["pb_ini"], data["pb_fin"])
+    for i, f_str in enumerate(fechas):
+        ws[f"B{8+i}"] = f_str
+
+def _escribir_m1_monitoreo(wb, data):
+    ws = wb["Monitoreo"]
+    # B8 en adelante para fechas
+    fechas = _generar_fechas_mensuales(data["pr_ini"], data["pr_fin"])
+    for i, f_str in enumerate(fechas):
+        ws[f"B{8+i}"] = f_str
 
 
 def _escribir_hoja_instrucciones(wb, var_dep, vars_ind, fecha_ini, fecha_fin):
@@ -1007,6 +1065,67 @@ def leer_excel_exploratorio(path: str) -> tuple[pd.DataFrame, dict, list]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# C — LECTURA DEL EXCEL M1 (CONSUMO ABSOLUTO)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def leer_excel_m1(path: str) -> tuple[pd.DataFrame, pd.DataFrame, dict, list]:
+    """
+    Lee las hojas Periodo_Base y Monitoreo del Excel M1.
+    Retorna (df_base, df_monitoreo, meta, errores).
+    """
+    errores = []
+    if not os.path.exists(path):
+        return None, None, {}, [f"Archivo no encontrado: {path}"]
+
+    wb = load_workbook(path, data_only=True)
+    
+    # Validar hojas
+    for s in ["Período_Base", "Monitoreo"]:
+        if s not in wb.sheetnames:
+            errores.append(f"Falta la hoja obligatoria: {s}")
+    
+    if errores: return None, None, {}, errores
+
+    # Leer Período_Base
+    df_base = _leer_hoja_datos_m1(wb["Período_Base"])
+    # Leer Monitoreo
+    df_monitoreo = _leer_hoja_datos_m1(wb["Monitoreo"])
+
+    # Metadatos desde Instrucciones
+    ws_inst = wb["Instrucciones"]
+    meta = {
+        "entidad": ws_inst["C12"].value,
+        "fuente": ws_inst["C13"].value,
+        "unidad": ws_inst["C14"].value,
+        "periodo_base_text": ws_inst["C15"].value
+    }
+
+    return df_base, df_monitoreo, meta, errores
+
+def _leer_hoja_datos_m1(ws):
+    """Auxiliar para leer la estructura de B6:K en M1"""
+    # 1. Detectar encabezados en fila 6
+    headers = []
+    for col in range(2, 13): # B a L
+        val = ws.cell(row=6, column=col).value
+        if val: headers.append(str(val).strip())
+        else: break
+    
+    # 2. Leer datos desde fila 8
+    datos = []
+    for r in range(8, ws.max_row + 1):
+        fecha = ws.cell(row=r, column=2).value # Col B
+        if not fecha: break
+        
+        row_dict = {"Fecha": str(fecha)}
+        for i, h in enumerate(headers[1:]): # Resto de columnas
+            row_dict[h] = ws.cell(row=r, column=3 + i).value
+        datos.append(row_dict)
+    
+    return pd.DataFrame(datos)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # C — ESCRITURA DE RESULTADOS EXPLORATORIOS AL EXCEL
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1103,6 +1222,52 @@ def _limpiar_nombre(nombre: str) -> str:
     nombre = re.sub(r"[^\w\s-]", "", nombre)
     nombre = re.sub(r"[\s]+", "_", nombre)
     return nombre[:50]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# D — ESCRITURA DE RESULTADOS M1 (CONSUMO ABSOLUTO)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def escribir_resultados_m1(path: str, df_lben: pd.DataFrame, df_mon: pd.DataFrame, meta: dict) -> bool:
+    """
+    Escribe resultados de cálculo en la hoja Modelo_LBEn y Monitoreo del Excel M1.
+    """
+    if not os.path.exists(path): return False
+    wb = load_workbook(path)
+    
+    # 1. Hoja Modelo_LBEn: Identificación y Métricas
+    ws_mod = wb["Modelo_LBEn"]
+    ws_mod["D5"] = meta.get("entidad", "—")
+    ws_mod["D6"] = meta.get("fuente", "—")
+    ws_mod["D7"] = meta.get("unidad", "—")
+    
+    # Métricas (Basado en inspección previa)
+    ws_mod["K5"] = meta.get("periodo_base_text", "—").split("-")[0].strip() # Inicio
+    ws_mod["K6"] = meta.get("periodo_base_text", "—").split("-")[-1].strip() # Fin
+    ws_mod["K7"] = df_lben['lben'].sum() # Consumo promedio anual
+    
+    # 2. Hoja Modelo_LBEn: Tabla LBEn Mensual (Desde B16)
+    for i, row in df_lben.iterrows():
+        fila = 16 + i
+        ws_mod[f"C{fila}"] = row['lben']
+        ws_mod[f"D{fila}"] = row['n_usados']
+        ws_mod[f"E{fila}"] = row['lim_inf']
+        ws_mod[f"F{fila}"] = row['lim_sup']
+
+    # 3. Hoja Monitoreo: Columnas Azules (Desde Col L en adelante)
+    if df_mon is not None and not df_mon.empty:
+        ws_mon = wb["Monitoreo"]
+        for i, row in df_mon.iterrows():
+            fila = 8 + i
+            # L: Normalizado, M: Normalizado y Ajustado (M1 asume iguales salvo ajuste NR)
+            ws_mon[f"L{fila}"] = row.get("Normalizado", 0)
+            ws_mon[f"M{fila}"] = row.get("Normalizado", 0) # Simplificado M1
+            ws_mon[f"N{fila}"] = row.get("LBEn_Mes", 0)
+            ws_mon[f"O{fila}"] = row.get("Ahorro_kWh", 0)
+            ws_mon[f"P{fila}"] = row.get("Ahorro_Pct", 0) / 100 # Para formato %
+
+    wb.save(path)
+    return True
 ```
 
 ## Core / Models
@@ -1110,6 +1275,127 @@ def _limpiar_nombre(nombre: str) -> str:
 ### m1_absoluto.py
 
 ```python
+"""
+core/models/m1_absoluto.py
+==========================
+Lógica de cálculo para el Modelo M1 de Consumo Absoluto.
+Sigue los lineamientos de la Resolución UPME 016/2024.
+"""
+
+import pandas as pd
+import numpy as np
+
+def procesar_m1(df_base: pd.DataFrame, df_monitoreo: pd.DataFrame = None):
+    """
+    Motor principal del Modelo M1.
+    Calcula la LBEn mensual, filtrando datos atípicos.
+    """
+    
+    # 1. Limpieza y Normalización Inicial
+    # Aseguramos nombres de columnas estándar internamente
+    # Col B: Fecha, Col C: Consumo, Col D: Días
+    dfb = df_base.copy()
+    
+    # Intentamos identificar columnas por posición o nombre aproximado
+    # Suponiendo: Fecha (0), Consumo (1), Dias (2)
+    col_consumo = dfb.columns[1]
+    col_dias = dfb.columns[2]
+    
+    dfb['Consumo_Num'] = pd.to_numeric(dfb[col_consumo], errors='coerce')
+    dfb['Dias_Num'] = pd.to_numeric(dfb[col_dias], errors='coerce')
+    
+    # Normalización a 30 días
+    dfb['Normalizado'] = (dfb['Consumo_Num'] / dfb['Dias_Num']) * 30
+    
+    # Extraer Mes (1-12)
+    # Nota: El formato de fecha en el Excel es 'Ene-2022' o similar
+    # Para mayor robustez, intentaremos parsear
+    dfb['Month'] = pd.to_datetime(dfb['Fecha'], errors='coerce').dt.month
+    
+    # 2. Filtrado y Cálculo de LBEn por Mes
+    resultados_lben = []
+    
+    for mes in range(1, 13):
+        n_mes = {1:'Enero', 2:'Febrero', 3:'Marzo', 4:'Abril', 5:'Mayo', 6:'Junio',
+                 7:'Julio', 8:'Agosto', 9:'Septiembre', 10:'Octubre', 11:'Noviembre', 12:'Diciembre'}[mes]
+        
+        datos_mes = dfb[dfb['Month'] == mes]['Normalizado'].dropna()
+        n_inicial = len(datos_mes)
+        
+        if n_inicial == 0:
+            resultados_lben.append({
+                'mes': n_mes, 'lben': 0, 'n_usados': 0, 
+                'lim_inf': 0, 'lim_sup': 0, 'min_hist': 0
+            })
+            continue
+            
+        mean_val = datos_mes.mean()
+        std_val = datos_mes.std()
+        
+        # Lógica de filtrado solicitada
+        if n_inicial <= 10:
+            # Filtro +/- 10%
+            filtered = datos_mes[(datos_mes >= mean_val * 0.9) & (datos_mes <= mean_val * 1.1)]
+        else:
+            # Filtro +/- 2 SD
+            filtered = datos_mes[(datos_mes >= mean_val - 2*std_val) & (datos_mes <= mean_val + 2*std_val)]
+            
+        n_final = len(filtered)
+        lben_val = filtered.mean() if n_final > 0 else mean_val
+        
+        # Límites estadísticos (ej. para gráficos)
+        resultados_lben.append({
+            'mes': n_mes,
+            'lben': lben_val,
+            'n_usados': n_final,
+            'n_inicial': n_inicial,
+            'lim_inf': lben_val - (filtered.std() * 2 if n_final > 1 else 0),
+            'lim_sup': lben_val + (filtered.std() * 2 if n_final > 1 else 0),
+            'min_hist': filtered.min() if n_final > 0 else 0
+        })
+        
+    df_lben = pd.DataFrame(resultados_lben)
+    
+    # 3. Monitoreo (si existe)
+    res_monitoreo = None
+    if df_monitoreo is not None and not df_monitoreo.empty:
+        dfm = df_monitoreo.copy()
+        dfm['Month'] = pd.to_datetime(dfm['Fecha'], errors='coerce').dt.month
+        
+        # Unir con la LBEn calculada
+        dfm = dfm.merge(df_lben[['mes', 'lben']], left_on='Month', right_index=True, how='left')
+        # Nota: Mejor merge por nombre de mes o numero de mes
+        # map lben to months
+        lben_map = df_lben.set_index(df_lben.index + 1)['lben'].to_dict()
+        dfm['LBEn_Mes'] = dfm['Month'].map(lben_map)
+        
+        # Normalización monitoreo
+        col_c_m = dfm.columns[1]
+        col_d_m = dfm.columns[2]
+        dfm['Normalizado'] = (pd.to_numeric(dfm[col_c_m], errors='coerce') / 
+                              pd.to_numeric(dfm[col_d_m], errors='coerce')) * 30
+        
+        # Desempeño
+        dfm['Ahorro_kWh'] = dfm['LBEn_Mes'] - dfm['Normalizado']
+        dfm['Ahorro_Pct'] = (dfm['Ahorro_kWh'] / dfm['LBEn_Mes']) * 100
+        
+        res_monitoreo = dfm
+        
+    return df_lben, res_monitoreo
+
+def calcular_resumen_metricas(df_lben):
+    """Calcula totales como potencial de ahorro anual."""
+    consumo_anual_lben = df_lben['lben'].sum()
+    consumo_anual_min = df_lben['min_hist'].sum()
+    
+    potencial_ahorro_kwh = consumo_anual_lben - consumo_anual_min
+    potencial_ahorro_pct = (potencial_ahorro_kwh / consumo_anual_lben * 100) if consumo_anual_lben > 0 else 0
+    
+    return {
+        "consumo_promedio_anual": consumo_anual_lben,
+        "potencial_ahorro_anual": potencial_ahorro_pct,
+        "total_datos_usados": df_lben['n_usados'].sum()
+    }
 
 ```
 
@@ -1205,6 +1491,18 @@ class App(ctk.CTk):
         elif destino == "seleccion_modelo":
             from ui.pages.seleccion_modelo import SeleccionModeloPage
             return SeleccionModeloPage(self)
+
+        elif destino == "m1_config":
+            from ui.pages.m1_config import M1ConfigPage
+            return M1ConfigPage(self)
+
+        elif destino == "m1_carga":
+            from ui.pages.m1_carga import M1CargaPage
+            return M1CargaPage(self)
+
+        elif destino == "m1_resultados":
+            from ui.pages.m1_resultados import M1ResultadosPage
+            return M1ResultadosPage(self)
 
         else:
             raise ValueError(f"Destino desconocido: {destino}")
@@ -1664,7 +1962,7 @@ class ExploratorioConfigPage(ctk.CTkFrame):
         # ── Nombre del proyecto ───────────────────────────────────────────────
         self._seccion_label(card, "Nombre del proyecto")
         self.entry_nombre = self._entry(
-            card, placeholder="Ej: Edificio Central — 2024"
+            card, placeholder="Ej: Edificio"
         )
         self.entry_nombre.grid(row=2, column=0, sticky="ew", **pad)
 
@@ -2443,6 +2741,8 @@ Pantalla de bienvenida — Hub principal de navegación.
 """
 
 import customtkinter as ctk
+from PIL import Image
+import os
 from ui.theme import COLORS, FONTS, DIMS
 
 
@@ -2470,26 +2770,24 @@ class HomePage(ctk.CTkFrame):
         )
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
-        sidebar.grid_rowconfigure(6, weight=1)
-
-        # Línea acento superior
-        acento = ctk.CTkFrame(
-            sidebar, fg_color=COLORS.accent,
-            height=3, corner_radius=0
-        )
-        acento.pack(fill="x")
+        
+        # Contenedor centrado
+        center_container = ctk.CTkFrame(sidebar, fg_color="transparent")
+        center_container.place(relx=0.5, rely=0.5, anchor="center")
 
         # Logo / ícono
-        ctk.CTkLabel(
-            sidebar,
-            text="⚡",
-            font=(FONTS.family, 42),
-            text_color=COLORS.accent
-        ).pack(pady=(32, 8))
+        logo_path = os.path.join("assets", "logo_lben.png")
+        if os.path.exists(logo_path):
+            img = ctk.CTkImage(light_image=Image.open(logo_path),
+                               dark_image=Image.open(logo_path),
+                               size=(120, 120))
+            ctk.CTkLabel(center_container, image=img, text="").pack(pady=(0, 20))
+        else:
+            ctk.CTkLabel(center_container, text="⚡", font=(FONTS.family, 42), text_color=COLORS.accent).pack(pady=(0, 20))
 
         # Nombre app
         ctk.CTkLabel(
-            sidebar,
+            center_container,
             text="Línea Base\nEnergética",
             font=(FONTS.family, FONTS.size_lg, "bold"),
             text_color=COLORS.text_white,
@@ -2497,7 +2795,7 @@ class HomePage(ctk.CTkFrame):
         ).pack(pady=(0, 4))
 
         ctk.CTkLabel(
-            sidebar,
+            center_container,
             text="Resolución UPME\n016 de 2024",
             font=(FONTS.family, FONTS.size_xs),
             text_color="#7A9B8E",
@@ -2506,21 +2804,21 @@ class HomePage(ctk.CTkFrame):
 
         # Separador
         ctk.CTkFrame(
-            sidebar, fg_color="#2D4F45",
-            height=1, corner_radius=0
-        ).pack(fill="x", padx=20, pady=8)
+            center_container, fg_color="#2D4F45",
+            height=1, corner_radius=0, width=150
+        ).pack(pady=8)
 
         # Subtítulo
         ctk.CTkLabel(
-            sidebar,
+            center_container,
             text="Modelos de referencia para\neficiencia energética",
             font=(FONTS.family, FONTS.size_xs),
             text_color="#7A9B8E",
             justify="center",
             wraplength=180
-        ).pack(pady=(16, 0), padx=16)
+        ).pack(pady=(16, 0))
 
-        # Versión al fondo
+        # Versión al fondo del sidebar (no del contenedor)
         ctk.CTkLabel(
             sidebar,
             text="v1.0.0",
@@ -2552,8 +2850,8 @@ class HomePage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             header,
-            text="Esta herramienta te permite establecer la línea base de consumo\n"
-                 "energético usando modelos estadísticos validados.",
+            text="Esta herramienta permite establecer la línea base y monitorear el desempeño energético en Edificios,\n"
+                 "de acuerdo con la Resolución 016 de 2024.",
             font=(FONTS.family, FONTS.size_md),
             text_color=COLORS.text_secondary,
             justify="left"
@@ -2566,11 +2864,11 @@ class HomePage(ctk.CTkFrame):
         features.grid(row=1, column=0, sticky="ew", padx=48, pady=(28, 0))
 
         self._feature_card(features, "📊", "3 Modelos",
-                           "Promedio · Cociente · Regresión", 0)
-        self._feature_card(features, "📥", "Plantilla Excel",
-                           "Descarga y llena tus datos", 1)
+                           "Absoluto · Cociente · Métodos Estadísticos", 0)
+        self._feature_card(features, "📥", "Hojas de Cálculo",
+                           "Descarga y edita tus datos", 1)
         self._feature_card(features, "📈", "Gráficos",
-                           "Línea base · Dispersión", 2)
+                           "Línea base · Desempeño Acum.", 2)
 
         # ── Rutas principales ─────────────────────────────────────────────────
         rutas = ctk.CTkFrame(
@@ -2718,6 +3016,499 @@ class HomePage(ctk.CTkFrame):
 
 ```
 
+### m1_carga.py
+
+```python
+"""
+ui/pages/m1_carga.py
+====================
+Pantalla de carga y validación de datos para el Modelo M1.
+"""
+
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
+from ui.theme import COLORS, FONTS, DIMS
+import pandas as pd
+
+class M1CargaPage(ctk.CTkFrame):
+    def __init__(self, master):
+        super().__init__(master, fg_color=COLORS.bg_main)
+        self.app = master
+        self.df_base = None
+        self.df_monitoreo = None
+        self.meta = {}
+        self._build()
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        self._build_topbar()
+        self._build_cuerpo()
+
+    def _build_topbar(self):
+        topbar = ctk.CTkFrame(self, fg_color=COLORS.bg_card, corner_radius=0, height=DIMS.topbar_height)
+        topbar.grid(row=0, column=0, sticky="ew")
+        topbar.grid_propagate(False)
+        topbar.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkFrame(topbar, fg_color=COLORS.accent, height=2).place(relx=0, rely=1.0, relwidth=1.0, anchor="sw")
+
+        ctk.CTkButton(
+            topbar, text="← Configuración", font=(FONTS.family, FONTS.size_sm),
+            fg_color="transparent", text_color=COLORS.primary, hover_color=COLORS.bg_main,
+            width=120, height=32, command=lambda: self.app.navegar("m1_config")
+        ).grid(row=0, column=0, padx=16, pady=8, sticky="w")
+
+        ctk.CTkLabel(
+            topbar, text="Modelo M1: Carga de Datos",
+            font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.primary
+        ).grid(row=0, column=1, sticky="w", padx=8)
+
+    def _build_cuerpo(self):
+        self.cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        self.cuerpo.grid(row=1, column=0, sticky="nsew", padx=48, pady=24)
+        self.cuerpo.grid_columnconfigure(0, weight=1)
+
+        # ── Zona de Carga ─────────────────────────────────────────────────────
+        self.zona_carga = ctk.CTkFrame(self.cuerpo, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
+        self.zona_carga.grid(row=0, column=0, sticky="ew", pady=(0, 24))
+        self.zona_carga.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            self.zona_carga, text="Selecciona el archivo Excel M1 con tus datos",
+            font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_secondary
+        ).pack(pady=(20, 10))
+
+        self.btn_seleccionar = ctk.CTkButton(
+            self.zona_carga, text="📂 Seleccionar Archivo",
+            font=(FONTS.family, FONTS.size_md, "bold"), fg_color=COLORS.primary,
+            height=40, command=self._seleccionar_archivo
+        )
+        self.btn_seleccionar.pack(pady=(0, 20))
+
+        # ── Zona de Resumen (oculta inicialmente) ─────────────────────────────
+        self.zona_resumen = ctk.CTkFrame(self.cuerpo, fg_color="transparent")
+        self.zona_resumen.grid_columnconfigure((0, 1), weight=1)
+
+    def _seleccionar_archivo(self):
+        path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")])
+        if not path: return
+
+        from core.io_excel import leer_excel_m1
+        df_b, df_m, meta, errores = leer_excel_m1(path)
+
+        if errores:
+            messagebox.showerror("Errores en el archivo", "\n".join(errores))
+            return
+
+        self.df_base = df_b
+        self.df_monitoreo = df_m
+        self.meta = meta
+        self.app.session["excel_path"] = path
+        
+        self._mostrar_resumen()
+
+    def _mostrar_resumen(self):
+        # Limpiar zona resumen
+        for widget in self.zona_resumen.winfo_children(): widget.destroy()
+        self.zona_resumen.grid(row=1, column=0, sticky="nsew")
+
+        # Card Info Proyecto
+        card_info = ctk.CTkFrame(self.zona_resumen, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
+        card_info.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        
+        ctk.CTkLabel(card_info, text="Información del Proyecto", font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary).pack(pady=10)
+        
+        info_text = (
+            f"📍 Entidad: {self.meta.get('entidad', 'N/A')}\n"
+            f"⚡ Fuente: {self.meta.get('fuente', 'N/A')}\n"
+            f"📏 Unidad: {self.meta.get('unidad', 'N/A')}\n"
+            f"📅 Periodo Base: {self.meta.get('periodo_base_text', 'N/A')}"
+        )
+        ctk.CTkLabel(card_info, text=info_text, justify="left", font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_primary).pack(padx=20, pady=(0, 20))
+
+        # Card Estadísticas Datos
+        card_stats = ctk.CTkFrame(self.zona_resumen, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
+        card_stats.grid(row=0, column=1, sticky="nsew", padx=(12, 0))
+        
+        ctk.CTkLabel(card_stats, text="Resumen de Datos", font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary).pack(pady=10)
+        
+        stats_text = (
+            f"📊 Registros Periodo Base: {len(self.df_base)}\n"
+            f"📈 Registros Monitoreo: {len(self.df_monitoreo)}\n"
+            f"✅ Columnas encontradas: {len(self.df_base.columns)}"
+        )
+        ctk.CTkLabel(card_stats, text=stats_text, justify="left", font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_primary).pack(padx=20, pady=(0, 20))
+
+        # Botón Procesar
+        ctk.CTkButton(
+            self.cuerpo, text="⚙️ Calcular Línea Base y Desempeño",
+            font=(FONTS.family, FONTS.size_md, "bold"), fg_color=COLORS.accent,
+            text_color=COLORS.primary, height=48, command=self._procesar_m1
+        ).grid(row=2, column=0, pady=32)
+
+    def _procesar_m1(self):
+        # Guardar en sesión para el siguiente paso
+        self.app.session["df_base"] = self.df_base
+        self.app.session["df_monitoreo"] = self.df_monitoreo
+        self.app.session["meta_m1"] = self.meta
+        
+        # Navegar a resultados (pendiente crear en Paso 5)
+        self.app.navegar("m1_resultados")
+
+```
+
+### m1_config.py
+
+```python
+"""
+ui/pages/m1_config.py
+======================
+Pantalla de configuración para el Modelo M1: Consumo Absoluto.
+"""
+
+import customtkinter as ctk
+from tkinter import messagebox
+from datetime import datetime
+from ui.theme import COLORS, FONTS, DIMS
+
+class M1ConfigPage(ctk.CTkFrame):
+    def __init__(self, master):
+        super().__init__(master, fg_color=COLORS.bg_main)
+        self.app = master
+        self._build()
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        self._build_topbar()
+        self._build_cuerpo()
+
+    def _build_topbar(self):
+        topbar = ctk.CTkFrame(
+            self, fg_color=COLORS.bg_card,
+            corner_radius=0, height=DIMS.topbar_height
+        )
+        topbar.grid(row=0, column=0, sticky="ew")
+        topbar.grid_propagate(False)
+        topbar.grid_columnconfigure(1, weight=1)
+
+        # Línea de acento
+        ctk.CTkFrame(topbar, fg_color=COLORS.accent, height=2).place(relx=0, rely=1.0, relwidth=1.0, anchor="sw")
+
+        ctk.CTkButton(
+            topbar, text="← Inicio", font=(FONTS.family, FONTS.size_sm),
+            fg_color="transparent", text_color=COLORS.primary,
+            hover_color=COLORS.bg_main, width=90, height=32,
+            command=lambda: self.app.navegar("home")
+        ).grid(row=0, column=0, padx=16, pady=8, sticky="w")
+
+        ctk.CTkLabel(
+            topbar, text="Modelo M1: Consumo Absoluto — Configuración",
+            font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.primary
+        ).grid(row=0, column=1, sticky="w", padx=8)
+
+        ctk.CTkButton(
+            topbar, text="🚀 Cargar datos existentes",
+            font=(FONTS.family, FONTS.size_sm), fg_color=COLORS.primary,
+            text_color=COLORS.text_white, height=32,
+            command=lambda: self.app.navegar("m1_carga")
+        ).grid(row=0, column=2, padx=16, pady=8, sticky="e")
+
+    def _build_cuerpo(self):
+        scroll = ctk.CTkScrollableFrame(self, fg_color=COLORS.bg_main, corner_radius=0)
+        scroll.grid(row=1, column=0, sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
+
+        card = ctk.CTkFrame(
+            scroll, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius,
+            border_width=1, border_color=COLORS.border
+        )
+        card.grid(row=0, column=0, padx=48, pady=24, sticky="ew")
+        card.grid_columnconfigure(0, weight=1)
+
+        pad = {"padx": DIMS.padding_card, "pady": (0, 16)}
+
+        # 1. Identificación
+        self._seccion_label(card, "Identificación del Proyecto")
+        self.entry_nombre = self._entry(card, "Nombre de la Entidad / Edificio / Proceso", row=1)
+        
+        # Fuente y Unidad en la misma fila
+        fuente_frame = ctk.CTkFrame(card, fg_color="transparent")
+        fuente_frame.grid(row=2, column=0, sticky="ew", **pad)
+        fuente_frame.grid_columnconfigure((0, 1), weight=1)
+
+        self.entry_fuente = self._entry_with_label(fuente_frame, "Fuente de Energía", "Ej: Electricidad", 0, 0)
+        self.entry_unidad = self._entry_with_label(fuente_frame, "Unidad de Medida", "Ej: kWh", 0, 1)
+
+        # 2. Periodo Base
+        self._seccion_label(card, "Periodo Base (Histórico)", row=3)
+        self.entry_pb_ini, self.entry_pb_fin = self._date_range(card, 4)
+
+        # 3. Periodo de Reporte
+        self._seccion_label(card, "Periodo de Reporte (Seguimiento)", row=5)
+        self.entry_pr_ini, self.entry_pr_fin = self._date_range(card, 6)
+
+        # Botón Acción
+        self._build_botones(scroll)
+
+    def _build_botones(self, parent):
+        btn_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        btn_frame.grid(row=1, column=0, sticky="ew", padx=48, pady=(0, 32))
+
+        ctk.CTkButton(
+            btn_frame, text="📥  Confirmar y descargar plantilla M1",
+            font=(FONTS.family, FONTS.size_md, "bold"),
+            fg_color=COLORS.accent, text_color=COLORS.primary,
+            height=44, command=self._confirmar_y_descargar
+        ).pack(side="left")
+
+    # --- Helpers ---
+    def _seccion_label(self, parent, texto, row=0):
+        ctk.CTkLabel(
+            parent, text=texto, font=(FONTS.family, FONTS.size_sm, "bold"),
+            text_color=COLORS.primary, anchor="w"
+        ).grid(row=row, column=0, sticky="w", padx=DIMS.padding_card, pady=(16, 4))
+
+    def _entry(self, parent, placeholder, row):
+        e = ctk.CTkEntry(parent, placeholder_text=placeholder, font=(FONTS.family, FONTS.size_sm),
+                         fg_color=COLORS.bg_main, border_color=COLORS.border, height=38, corner_radius=8)
+        e.grid(row=row, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 16))
+        return e
+
+    def _entry_with_label(self, parent, label, placeholder, row, col):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=col, sticky="ew", padx=4 if col==0 else (4,0))
+        f.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(f, text=label, font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary).grid(row=0, column=0, sticky="w")
+        e = ctk.CTkEntry(f, placeholder_text=placeholder, height=38, corner_radius=8, fg_color=COLORS.bg_main, border_color=COLORS.border)
+        e.grid(row=1, column=0, sticky="ew")
+        return e
+
+    def _date_range(self, parent, row):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 16))
+        f.grid_columnconfigure((0, 1), weight=1)
+        
+        e_ini = self._entry_with_label(f, "Fecha Inicio (MM/AAAA)", "01/2021", 0, 0)
+        e_fin = self._entry_with_label(f, "Fecha Fin (MM/AAAA)", "12/2023", 0, 1)
+        return e_ini, e_fin
+
+    def _confirmar_y_descargar(self):
+        # Lógica de guardado en sesión y llamada a io_excel
+        data = {
+            "nombre": self.entry_nombre.get().strip(),
+            "fuente": self.entry_fuente.get().strip(),
+            "unidad": self.entry_unidad.get().strip(),
+            "pb_ini": self.entry_pb_ini.get().strip(),
+            "pb_fin": self.entry_pb_fin.get().strip(),
+            "pr_ini": self.entry_pr_ini.get().strip(),
+            "pr_fin": self.entry_pr_fin.get().strip(),
+        }
+
+        if not all(data.values()):
+            messagebox.showwarning("Campos faltantes", "Por favor completa todos los campos.")
+            return
+
+        # Guardar en sesión
+        self.app.session.update(data)
+        
+        # Llamar a io_excel (pendiente implementar en Paso 2)
+        from core.io_excel import generar_plantilla_m1
+        if generar_plantilla_m1(data):
+            # Opcional: navegar a carga
+            pass
+
+    def _validar_fecha(self, f):
+        try:
+            datetime.strptime(f, "%m/%Y")
+            return True
+        except: return False
+
+```
+
+### m1_resultados.py
+
+```python
+"""
+ui/pages/m1_resultados.py
+=========================
+Visualización de resultados del Modelo M1: Consumo Absoluto.
+"""
+
+import customtkinter as ctk
+from tkinter import messagebox
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from ui.theme import COLORS, FONTS, DIMS
+from core.io_excel import escribir_resultados_m1
+
+class M1ResultadosPage(ctk.CTkFrame):
+    def __init__(self, master):
+        super().__init__(master, fg_color=COLORS.bg_main)
+        self.app = master
+        
+        # Recuperar datos de sesión
+        self.df_lben = self.app.session.get("df_lben")
+        self.df_mon  = self.app.session.get("df_monitoreo")
+        self.meta    = self.app.session.get("meta_m1")
+
+        self._build()
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        self._build_topbar()
+        self._build_tabs()
+
+    def _build_topbar(self):
+        topbar = ctk.CTkFrame(self, fg_color=COLORS.bg_card, corner_radius=0, height=DIMS.topbar_height)
+        topbar.grid(row=0, column=0, sticky="ew")
+        topbar.grid_propagate(False)
+        topbar.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkFrame(topbar, fg_color=COLORS.accent, height=2).place(relx=0, rely=1.0, relwidth=1.0, anchor="sw")
+
+        ctk.CTkButton(
+            topbar, text="← Volver a Carga", font=(FONTS.family, FONTS.size_sm),
+            fg_color="transparent", text_color=COLORS.primary, hover_color=COLORS.bg_main,
+            width=120, height=32, command=lambda: self.app.navegar("m1_carga")
+        ).grid(row=0, column=0, padx=16, pady=8, sticky="w")
+
+        ctk.CTkLabel(
+            topbar, text="M1: Resultados y Seguimiento",
+            font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.primary
+        ).grid(row=0, column=1, sticky="w", padx=8)
+
+        ctk.CTkButton(
+            topbar, text="💾 Actualizar Informe en Excel",
+            font=(FONTS.family, FONTS.size_sm, "bold"), fg_color=COLORS.primary,
+            text_color="white", height=32, command=self._guardar_excel
+        ).grid(row=0, column=2, padx=16, pady=8, sticky="e")
+
+    def _build_tabs(self):
+        self.tabs = ctk.CTkTabview(
+            self, fg_color=COLORS.bg_main, segmented_button_fg_color=COLORS.bg_card,
+            segmented_button_selected_color=COLORS.primary,
+            segmented_button_selected_hover_color=COLORS.primary_dark,
+            segmented_button_unselected_hover_color=COLORS.border,
+            text_color=COLORS.primary
+        )
+        self.tabs.grid(row=1, column=0, sticky="nsew", padx=20, pady=20)
+        
+        self.tabs.add("Línea Base")
+        self.tabs.add("Desempeño")
+        self.tabs.add("Seguimiento")
+        self.tabs.add("Ajuste NR")
+
+        self._render_lben_tab()
+        self._render_desempeno_tab()
+        self._render_seguimiento_tab()
+        self._render_ajuste_tab()
+
+    def _render_lben_tab(self):
+        tab = self.tabs.tab("Línea Base")
+        
+        fig, ax = plt.subplots(figsize=(8, 4), facecolor=COLORS.bg_main)
+        ax.set_facecolor(COLORS.bg_main)
+        
+        meses = self.df_lben['mes']
+        valores = self.df_lben['lben']
+        
+        ax.bar(meses, valores, color=COLORS.primary, alpha=0.7, label="LBEn Mensual")
+        ax.plot(meses, valores, marker='o', color=COLORS.accent, linewidth=2)
+        
+        ax.set_title("Línea Base Energética por Mes", color=COLORS.primary, fontsize=12, fontweight='bold')
+        ax.tick_params(axis='x', rotation=45, labelcolor=COLORS.text_secondary)
+        ax.tick_params(axis='y', labelcolor=COLORS.text_secondary)
+        ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+        
+        rect = fig.tight_layout()
+        canvas = FigureCanvasTkAgg(fig, master=tab)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
+
+    def _render_desempeno_tab(self):
+        tab = self.tabs.tab("Desempeño")
+        if self.df_mon is None or self.df_mon.empty:
+            ctk.CTkLabel(tab, text="No hay datos de monitoreo cargados para mostrar desempeño.", text_color=COLORS.text_secondary).pack(pady=40)
+            return
+
+        fig, ax = plt.subplots(figsize=(8, 4), facecolor=COLORS.bg_main)
+        ax.set_facecolor(COLORS.bg_main)
+        
+        ax.plot(self.df_mon['Fecha'], self.df_mon['LBEn_Mes'], label="Línea Base (Meta)", color=COLORS.primary, linestyle='--', marker='s')
+        ax.plot(self.df_mon['Fecha'], self.df_mon['Normalizado'], label="Consumo Real", color=COLORS.accent, marker='o', linewidth=2)
+        
+        ax.set_title("Consumo Real vs Línea Base", color=COLORS.primary, fontsize=12, fontweight='bold')
+        ax.legend()
+        ax.tick_params(axis='x', rotation=45, labelcolor=COLORS.text_secondary)
+        ax.tick_params(axis='y', labelcolor=COLORS.text_secondary)
+        ax.grid(True, linestyle='--', alpha=0.3)
+        
+        fig.tight_layout()
+        canvas = FigureCanvasTkAgg(fig, master=tab)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
+
+    def _render_seguimiento_tab(self):
+        tab = self.tabs.tab("Seguimiento")
+        scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        scroll.pack(fill="both", expand=True)
+
+        if self.df_mon is None or self.df_mon.empty:
+            ctk.CTkLabel(scroll, text="Cargue datos de monitoreo para ver la tabla de seguimiento.").pack(pady=20)
+            return
+
+        # Encabezado simple de tabla
+        headers = ["Fecha", "Real (kWh)", "LBEn (kWh)", "Ahorro (kWh)", "Ahorro (%)"]
+        h_frame = ctk.CTkFrame(scroll, fg_color=COLORS.primary, height=30)
+        h_frame.pack(fill="x", pady=(0, 5))
+        for i, h in enumerate(headers):
+            ctk.CTkLabel(h_frame, text=h, text_color="white", font=(FONTS.family, 11, "bold"), width=120).grid(row=0, column=i, padx=5)
+
+        # Filas
+        for _, row in self.df_mon.iterrows():
+            f_frame = ctk.CTkFrame(scroll, fg_color=COLORS.bg_card, height=28)
+            f_frame.pack(fill="x", pady=2)
+            
+            ctk.CTkLabel(f_frame, text=row['Fecha'], width=120).grid(row=0, column=0, padx=5)
+            ctk.CTkLabel(f_frame, text=f"{row['Normalizado']:,.1f}", width=120).grid(row=0, column=1, padx=5)
+            ctk.CTkLabel(f_frame, text=f"{row['LBEn_Mes']:,.1f}", width=120).grid(row=0, column=2, padx=5)
+            
+            ahorro = row['Ahorro_kWh']
+            color = COLORS.primary if ahorro >= 0 else COLORS.danger
+            ctk.CTkLabel(f_frame, text=f"{ahorro:,.1f}", text_color=color, width=120, font=(FONTS.family, 11, "bold")).grid(row=0, column=3, padx=5)
+            ctk.CTkLabel(f_frame, text=f"{row['Ahorro_Pct']:,.1f}%", text_color=color, width=120, font=(FONTS.family, 11, "bold")).grid(row=0, column=4, padx=5)
+
+    def _render_ajuste_tab(self):
+        tab = self.tabs.tab("Ajuste NR")
+        ctk.CTkLabel(
+            tab, text="Ajustes No Rutinarios Detectados",
+            font=(FONTS.family, FONTS.size_lg, "bold"), text_color=COLORS.primary
+        ).pack(pady=20)
+        
+        # Aquí se detectarán filas donde 'Ajuste No Rutinario (NR)' == 'Si'
+        ajustes = self.df_base[self.df_base.iloc[:, 5].astype(str).str.lower() == 'si'] if self.df_base is not None else []
+        
+        if len(ajustes) == 0:
+            ctk.CTkLabel(tab, text="No se han reportado eventos no rutinarios en el periodo base.", text_color=COLORS.text_secondary).pack()
+        else:
+            for _, row in ajustes.iterrows():
+                msg = f"• {row['Fecha']}: {row.iloc[6]}"
+                ctk.CTkLabel(tab, text=msg, anchor="w", justify="left").pack(fill="x", padx=40)
+
+    def _guardar_excel(self):
+        path = self.app.session.get("excel_path")
+        if not path: return
+        
+        if escribir_resultados_m1(path, self.df_lben, self.df_mon, self.meta):
+            messagebox.showinfo("Éxito", "El archivo Excel ha sido actualizado con los resultados.")
+        else:
+            messagebox.showerror("Error", "No se pudo actualizar el archivo.")
+
+```
+
 ### m2.py
 
 ```python
@@ -2855,7 +3646,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
                 ),
                 "variables": "Solo consumo energético",
                 "recomendado_para": "Procesos continuos, clima estable",
-                "destino": "m1"
+                "destino": "m1_config"
             },
             {
                 "codigo":    "M2",
@@ -2870,7 +3661,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
                 ),
                 "variables": "Consumo + 1 variable de producción",
                 "recomendado_para": "Edificios con ocupación variable",
-                "destino": "m2"
+                "destino": "m2_config"
             },
             {
                 "codigo":    "M3",
@@ -2887,7 +3678,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
                 ),
                 "variables": "Consumo + 1 o más variables significativas",
                 "recomendado_para": "Edificios con múltiples factores",
-                "destino": "m3"
+                "destino": "m3_config"
             }
         ]
 

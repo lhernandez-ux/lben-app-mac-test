@@ -5,6 +5,8 @@ Pantalla de bienvenida — Hub principal de navegación.
 """
 
 import customtkinter as ctk
+from PIL import Image
+import os
 from ui.theme import COLORS, FONTS, DIMS
 
 
@@ -32,60 +34,53 @@ class HomePage(ctk.CTkFrame):
         )
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
-        sidebar.grid_rowconfigure(6, weight=1)
+        
+        # Espaciador superior para centrar verticalmente
+        ctk.CTkFrame(sidebar, fg_color="transparent", height=1).pack(expand=True)
 
-        # Línea acento superior
-        acento = ctk.CTkFrame(
-            sidebar, fg_color=COLORS.accent,
-            height=3, corner_radius=0
-        )
-        acento.pack(fill="x")
+        # Contenedor de contenido
+        cnt = ctk.CTkFrame(sidebar, fg_color="transparent")
+        cnt.pack(fill="x")
 
-        # Logo / ícono
+        # Logo
+        logo_path = os.path.join("assets", "logo_lben.png")
+        if os.path.exists(logo_path):
+            img = ctk.CTkImage(light_image=Image.open(logo_path),
+                               dark_image=Image.open(logo_path),
+                               size=(130, 130))
+            ctk.CTkLabel(cnt, image=img, text="").pack(pady=(0, 20))
+        else:
+            ctk.CTkLabel(cnt, text="⚡", font=(FONTS.family, 42), text_color=COLORS.accent).pack(pady=(0, 20))
+
+        # Textos
         ctk.CTkLabel(
-            sidebar,
-            text="⚡",
-            font=(FONTS.family, 42),
-            text_color=COLORS.accent
-        ).pack(pady=(32, 8))
-
-        # Nombre app
-        ctk.CTkLabel(
-            sidebar,
-            text="Línea Base\nEnergética",
+            cnt, text="Línea Base\nEnergética",
             font=(FONTS.family, FONTS.size_lg, "bold"),
-            text_color=COLORS.text_white,
-            justify="center"
+            text_color=COLORS.text_white, justify="center"
         ).pack(pady=(0, 4))
 
         ctk.CTkLabel(
-            sidebar,
-            text="Resolución UPME\n016 de 2024",
+            cnt, text="Resolución UPME\n016 de 2024",
             font=(FONTS.family, FONTS.size_xs),
-            text_color="#7A9B8E",
-            justify="center"
+            text_color="#7A9B8E", justify="center"
         ).pack(pady=(0, 24))
 
         # Separador
-        ctk.CTkFrame(
-            sidebar, fg_color="#2D4F45",
-            height=1, corner_radius=0
-        ).pack(fill="x", padx=20, pady=8)
+        ctk.CTkFrame(cnt, fg_color="#2D4F45", height=1, width=160).pack(pady=8)
 
         # Subtítulo
         ctk.CTkLabel(
-            sidebar,
-            text="Modelos de referencia para\neficiencia energética",
+            cnt, text="Modelos de referencia para\nmonitoreo del\nDesempeño Energético",
             font=(FONTS.family, FONTS.size_xs),
-            text_color="#7A9B8E",
-            justify="center",
-            wraplength=180
-        ).pack(pady=(16, 0), padx=16)
+            text_color="#7A9B8E", justify="center", wraplength=180
+        ).pack(pady=(16, 0))
 
-        # Versión al fondo
+        # Espaciador inferior para empujar la versión al fondo
+        ctk.CTkFrame(sidebar, fg_color="transparent", height=1).pack(expand=True)
+
+        # Versión
         ctk.CTkLabel(
-            sidebar,
-            text="v1.0.0",
+            sidebar, text="v1.0.0",
             font=(FONTS.family, FONTS.size_xs),
             text_color="#4A6B5E"
         ).pack(side="bottom", pady=16)
@@ -114,8 +109,8 @@ class HomePage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             header,
-            text="Esta herramienta te permite establecer la línea base de consumo\n"
-                 "energético usando modelos estadísticos validados.",
+            text="Esta herramienta permite establecer la línea base y monitorear el desempeño energético en Edificios,\n"
+                 "de acuerdo con la Resolución 016 de 2024.",
             font=(FONTS.family, FONTS.size_md),
             text_color=COLORS.text_secondary,
             justify="left"
@@ -128,11 +123,11 @@ class HomePage(ctk.CTkFrame):
         features.grid(row=1, column=0, sticky="ew", padx=48, pady=(28, 0))
 
         self._feature_card(features, "📊", "3 Modelos",
-                           "Promedio · Cociente · Regresión", 0)
-        self._feature_card(features, "📥", "Plantilla Excel",
-                           "Descarga y llena tus datos", 1)
+                           "Absoluto · Cociente · Métodos Estadísticos", 0)
+        self._feature_card(features, "📥", "Hojas de Cálculo",
+                           "Descarga y Edita tus Datos", 1)
         self._feature_card(features, "📈", "Gráficos",
-                           "Línea base · Dispersión", 2)
+                           "Línea base · Desempeño Acum.", 2)
 
         # ── Rutas principales ─────────────────────────────────────────────────
         rutas = ctk.CTkFrame(

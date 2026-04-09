@@ -19,6 +19,10 @@ from openpyxl.utils import get_column_letter
 
 # ── Ruta a la plantilla base ──────────────────────────────────────────────────
 _DIR_DATA = os.path.join(os.path.dirname(__file__), "..", "data")
+_PLANTILLA_M1 = os.path.join(
+    _DIR_DATA, "Plantilla_LBEn_M1_modelo.xlsx"
+)
+
 _PLANTILLA_EXPLORATORIA = os.path.join(
     _DIR_DATA, "plantilla_exploracion_modelo.xlsx"
 )
@@ -63,17 +67,91 @@ def generar_plantilla_exploratoria(
     shutil.copy2(_PLANTILLA_EXPLORATORIA, ruta_destino)
 
     # Personalizar
-    wb = load_workbook(ruta_destino)
-    _escribir_hoja_instrucciones(wb, var_dep, vars_ind, fecha_ini, fecha_fin)
-    _escribir_hoja_periodo(wb, fecha_ini, fecha_fin, var_dep, vars_ind)
-    wb.save(ruta_destino)
+    try:
+        wb = load_workbook(ruta_destino)
+        _escribir_hoja_instrucciones(wb, var_dep, vars_ind, fecha_ini, fecha_fin)
+        _escribir_hoja_periodo(wb, fecha_ini, fecha_fin, var_dep, vars_ind)
+        wb.save(ruta_destino)
 
-    messagebox.showinfo(
-        "Plantilla generada",
-        f"Plantilla guardada exitosamente en:\n{ruta_destino}\n\n"
-        "Llena la hoja 'Periodo_Análisis' con tus datos y luego cárgala en la app."
+        messagebox.showinfo(
+            "Plantilla generada",
+            f"Plantilla guardada exitosamente en:\n{ruta_destino}\n\n"
+            "Llena la hoja 'Periodo_Análisis' con tus datos y luego cárgala en la app."
+        )
+        return True
+    except PermissionError:
+        messagebox.showerror("Error de acceso", 
+                             f"No se pudo guardar la plantilla en:\n{ruta_destino}\n\n"
+                             "El archivo ya existe y está abierto. Ciérralo e intenta de nuevo.")
+        return False
+    except Exception as e:
+        messagebox.showerror("Error", f"Error inesperado al generar la plantilla: {e}")
+        return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# B — GENERACIÓN DE PLANTILLA M1 (CONSUMO ABSOLUTO)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def generar_plantilla_m1(data: dict) -> bool:
+    """
+    Personaliza y guarda la plantilla para el Modelo M1.
+    data: {nombre, fuente, unidad, pb_ini, pb_fin, pr_ini, pr_fin}
+    """
+    if not os.path.exists(_PLANTILLA_M1):
+        messagebox.showerror("Error", f"No se encontró la plantilla M1 en:\n{_PLANTILLA_M1}")
+        return False
+
+    nombre_archivo = f"M1_{_limpiar_nombre(data['nombre'])}.xlsx"
+    ruta_destino = filedialog.asksaveasfilename(
+        title="Guardar plantilla M1",
+        initialfile=nombre_archivo,
+        defaultextension=".xlsx",
+        filetypes=[("Excel", "*.xlsx")]
     )
-    return True
+    if not ruta_destino: return False
+
+    try:
+        shutil.copy2(_PLANTILLA_M1, ruta_destino)
+        wb = load_workbook(ruta_destino)
+        
+        _escribir_m1_identificacion(wb, data)
+        _escribir_m1_periodo_base(wb, data)
+        _escribir_m1_monitoreo(wb, data)
+        
+        wb.save(ruta_destino)
+        messagebox.showinfo("Éxito", f"Plantilla M1 generada en:\n{ruta_destino}")
+        return True
+    except PermissionError:
+        messagebox.showerror("Error de acceso", 
+                             f"No se puede crear el archivo:\n{ruta_destino}\n\n"
+                             "¿El archivo ya existe y está abierto en Excel? Ciérralo e intenta de nuevo.")
+        return False
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al generar plantilla M1: {e}")
+        return False
+
+def _escribir_m1_identificacion(wb, data):
+    """Escribe nombre, fuente y unidad en la hoja Modelo_LBEn."""
+    ws = wb["Modelo_LBEn"]
+    # Según usuario: D5, D6, D7
+    ws["D5"] = data["nombre"]
+    ws["D6"] = data["fuente"]
+    ws["D7"] = data["unidad"]
+
+def _escribir_m1_periodo_base(wb, data):
+    ws = wb["Período_Base"]
+    # B8 en adelante para fechas
+    fechas = _generar_fechas_mensuales(data["pb_ini"], data["pb_fin"])
+    for i, f_str in enumerate(fechas):
+        ws[f"B{8+i}"] = f_str
+
+def _escribir_m1_monitoreo(wb, data):
+    ws = wb["Monitoreo"]
+    # B8 en adelante para fechas
+    fechas = _generar_fechas_mensuales(data["pr_ini"], data["pr_fin"])
+    for i, f_str in enumerate(fechas):
+        ws[f"B{8+i}"] = f_str
 
 
 def _escribir_hoja_instrucciones(wb, var_dep, vars_ind, fecha_ini, fecha_fin):
@@ -263,6 +341,67 @@ def leer_excel_exploratorio(path: str) -> tuple[pd.DataFrame, dict, list]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# C — LECTURA DEL EXCEL M1 (CONSUMO ABSOLUTO)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def leer_excel_m1(path: str) -> tuple[pd.DataFrame, pd.DataFrame, dict, list]:
+    """
+    Lee las hojas Periodo_Base y Monitoreo del Excel M1.
+    Retorna (df_base, df_monitoreo, meta, errores).
+    """
+    errores = []
+    if not os.path.exists(path):
+        return None, None, {}, [f"Archivo no encontrado: {path}"]
+
+    wb = load_workbook(path, data_only=True)
+    
+    # Validar hojas
+    for s in ["Período_Base", "Monitoreo"]:
+        if s not in wb.sheetnames:
+            errores.append(f"Falta la hoja obligatoria: {s}")
+    
+    if errores: return None, None, {}, errores
+
+    # Leer Período_Base
+    df_base = _leer_hoja_datos_m1(wb["Período_Base"])
+    # Leer Monitoreo
+    df_monitoreo = _leer_hoja_datos_m1(wb["Monitoreo"])
+
+    # Metadatos desde Instrucciones
+    ws_inst = wb["Instrucciones"]
+    meta = {
+        "entidad": ws_inst["C12"].value,
+        "fuente": ws_inst["C13"].value,
+        "unidad": ws_inst["C14"].value,
+        "periodo_base_text": ws_inst["C15"].value
+    }
+
+    return df_base, df_monitoreo, meta, errores
+
+def _leer_hoja_datos_m1(ws):
+    """Auxiliar para leer la estructura de B6:K en M1"""
+    # 1. Detectar encabezados en fila 6
+    headers = []
+    for col in range(2, 13): # B a L
+        val = ws.cell(row=6, column=col).value
+        if val: headers.append(str(val).strip())
+        else: break
+    
+    # 2. Leer datos desde fila 8
+    datos = []
+    for r in range(8, ws.max_row + 1):
+        fecha = ws.cell(row=r, column=2).value # Col B
+        if not fecha: break
+        
+        row_dict = {"Fecha": str(fecha)}
+        for i, h in enumerate(headers[1:]): # Resto de columnas
+            row_dict[h] = ws.cell(row=r, column=3 + i).value
+        datos.append(row_dict)
+    
+    return pd.DataFrame(datos)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # C — ESCRITURA DE RESULTADOS EXPLORATORIOS AL EXCEL
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -344,8 +483,17 @@ def escribir_resultados_exploratorios(
                     color="2D6A4F" if row.get("significativa") else "E63946"
                 )
 
-    wb.save(path)
-    return True
+    try:
+        wb.save(path)
+        return True
+    except PermissionError:
+        messagebox.showerror("Archivo en uso",
+                             f"No se pudo actualizar el archivo:\n{path}\n\n"
+                             "Por favor, cierra el Excel y vuelve a intentarlo.")
+        return False
+    except Exception as e:
+        messagebox.showerror("Error al guardar", f"No se pudo guardar el archivo: {e}")
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -359,3 +507,58 @@ def _limpiar_nombre(nombre: str) -> str:
     nombre = re.sub(r"[^\w\s-]", "", nombre)
     nombre = re.sub(r"[\s]+", "_", nombre)
     return nombre[:50]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# D — ESCRITURA DE RESULTADOS M1 (CONSUMO ABSOLUTO)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def escribir_resultados_m1(path: str, df_lben: pd.DataFrame, df_mon: pd.DataFrame, meta: dict) -> bool:
+    """
+    Escribe resultados de cálculo en la hoja Modelo_LBEn y Monitoreo del Excel M1.
+    """
+    if not os.path.exists(path): return False
+    wb = load_workbook(path)
+    
+    # 1. Hoja Modelo_LBEn: Identificación y Métricas
+    ws_mod = wb["Modelo_LBEn"]
+    ws_mod["D5"] = meta.get("entidad", "—")
+    ws_mod["D6"] = meta.get("fuente", "—")
+    ws_mod["D7"] = meta.get("unidad", "—")
+    
+    # Métricas (Basado en inspección previa)
+    ws_mod["K5"] = meta.get("periodo_base_text", "—").split("-")[0].strip() # Inicio
+    ws_mod["K6"] = meta.get("periodo_base_text", "—").split("-")[-1].strip() # Fin
+    ws_mod["K7"] = df_lben['lben'].sum() # Consumo promedio anual
+    
+    # 2. Hoja Modelo_LBEn: Tabla LBEn Mensual (Desde B16)
+    for i, row in df_lben.iterrows():
+        fila = 16 + i
+        ws_mod[f"C{fila}"] = row['lben']
+        ws_mod[f"D{fila}"] = row['n_usados']
+        ws_mod[f"E{fila}"] = row['lim_inf']
+        ws_mod[f"F{fila}"] = row['lim_sup']
+
+    # 3. Hoja Monitoreo: Columnas Azules (Desde Col L en adelante)
+    if df_mon is not None and not df_mon.empty:
+        ws_mon = wb["Monitoreo"]
+        for i, row in df_mon.iterrows():
+            fila = 8 + i
+            # L: Normalizado, M: Normalizado y Ajustado (M1 asume iguales salvo ajuste NR)
+            ws_mon[f"L{fila}"] = row.get("Normalizado", 0)
+            ws_mon[f"M{fila}"] = row.get("Normalizado", 0) # Simplificado M1
+            ws_mon[f"N{fila}"] = row.get("LBEn_Mes", 0)
+            ws_mon[f"O{fila}"] = row.get("Ahorro_kWh", 0)
+            ws_mon[f"P{fila}"] = row.get("Ahorro_Pct", 0) / 100 # Para formato %
+
+    try:
+        wb.save(path)
+        return True
+    except PermissionError:
+        messagebox.showerror("Archivo en uso",
+                             f"No se pueden guardar los resultados en:\n{path}\n\n"
+                             "El archivo está abierto en Excel. Ciérralo y vuelve a intentarlo.")
+        return False
+    except Exception as e:
+        messagebox.showerror("Error grave", f"Ocurrió un error al guardar los resultados M1: {e}")
+        return False
