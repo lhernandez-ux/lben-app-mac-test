@@ -2,7 +2,7 @@
 ui/pages/exploratorio_resultados.py
 =====================================
 Pantalla de resultados del análisis exploratorio.
-Muestra: recomendación, tabla Pearson, scatters, sincronía temporal.
+Muestra: recomendación, diagnóstico avanzado, tabla Pearson, scatters, sincronía temporal.
 """
 
 import customtkinter as ctk
@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
+import os
+from PIL import Image
 from ui.theme import COLORS, FONTS, DIMS
 
 
@@ -20,6 +22,7 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         self.app = master
         self._resultados    = None
         self._recomendacion = None
+        self._diagnostico   = None
         self._build()
 
     def _build(self):
@@ -77,7 +80,7 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
     # ── Cálculos ──────────────────────────────────────────────────────────────
     def _calcular(self):
-        from core.exploratorio import calcular_correlaciones, recomendar_modelo
+        from core.exploratorio import calcular_correlaciones, recomendar_modelo, obtener_diagnostico_avanzado
         sesion   = self.app.session
         df       = sesion.get("df_datos")
         var_dep  = sesion.get("var_dependiente", "")
@@ -88,11 +91,13 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         self._resultados    = calcular_correlaciones(df, var_dep, vars_ind)
         self._recomendacion = recomendar_modelo(self._resultados)
+        self._diagnostico   = obtener_diagnostico_avanzado(df, var_dep, vars_ind)
 
-        # Guardar recomendación en sesión
+        # Guardar resultados en sesión
         sesion["resultados_exploratorio"] = {
             "correlaciones":  self._resultados,
-            "recomendacion":  self._recomendacion
+            "recomendacion":  self._recomendacion,
+            "diagnostico":    self._diagnostico
         }
 
     # ── Cuerpo scrollable ─────────────────────────────────────────────────────
@@ -107,6 +112,10 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         # 1 — Card recomendación
         self._build_card_recomendacion(self.scroll, fila)
+        fila += 1
+
+        # 1.5 — Card Diagnóstico Avanzado
+        self._build_card_diagnostico(self.scroll, fila)
         fila += 1
 
         # 2 — Card tabla Pearson
@@ -138,16 +147,16 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         card.grid(row=fila, column=0, padx=48, pady=(24, 8), sticky="ew")
         card.grid_columnconfigure(1, weight=1)
 
-        # Ícono modelo
-        iconos = {"M1": "≡", "M2": "÷", "M3": "∿"}
-        icono  = iconos.get(rec["codigo"], "📊")
-
-        ctk.CTkLabel(
-            card,
-            text=icono,
-            font=(FONTS.family, 36),
-            text_color=COLORS.accent
-        ).grid(row=0, column=0, rowspan=2, padx=20, pady=20)
+        # Icono modelo (Imagen)
+        icon_map = {"M1": "m1_icon.png", "M2": "m2_icon.png", "M3": "m3_icon.png"}
+        icon_path = os.path.join("assets", icon_map.get(rec["codigo"], "m1_icon.png"))
+        
+        try:
+            pil_img = Image.open(icon_path)
+            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(48, 48))
+            ctk.CTkLabel(card, text="", image=ctk_img).grid(row=0, column=0, rowspan=2, padx=20, pady=20)
+        except:
+            ctk.CTkLabel(card, text="📊", font=(FONTS.family, 36), text_color=COLORS.accent).grid(row=0, column=0, rowspan=2, padx=20, pady=20)
 
         ctk.CTkLabel(
             card,
@@ -159,8 +168,8 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             card,
-            text="✦ Recomendación del Sistema",
-            font=(FONTS.family, FONTS.size_xs),
+            text="Recomendación del Sistema",
+            font=(FONTS.family, FONTS.size_xs, "bold"),
             text_color=COLORS.accent,
             anchor="w"
         ).grid(row=0, column=2, sticky="e", padx=20, pady=(20, 4))
@@ -175,6 +184,65 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
             justify="left"
         ).grid(row=1, column=1, columnspan=2,
                sticky="w", padx=(0, 20), pady=(0, 20))
+
+    # ── Card Diagnóstico ──────────────────────────────────────────────────────
+    def _build_card_diagnostico(self, parent, fila):
+        if not self._diagnostico:
+            return
+        
+        diag = self._diagnostico
+        card = self._card(parent, fila, "🔍  Calidad y Diagnóstico de los Datos")
+        
+        container = ctk.CTkFrame(card, fg_color="transparent")
+        container.pack(fill="x", padx=16, pady=(0, 16))
+        container.grid_columnconfigure((0, 1, 2), weight=1)
+
+        # --- A. OUTLIERS ---
+        out = diag["outliers"]
+        color_out = COLORS.danger if out["conteo"] > 0 else COLORS.success
+        f_out = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=color_out)
+        f_out.grid(row=0, column=0, padx=(0, 8), sticky="nsew")
+        
+        ctk.CTkLabel(f_out, text="Anomalías (Outliers)", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        if out["conteo"] > 0:
+            msg = f"Detectamos {out['conteo']} meses con consumos atípicos.\nRevisa la integridad de los datos."
+            ctk.CTkLabel(f_out, text="ALERTA", font=(FONTS.family, 10, "bold"), text_color=COLORS.danger).pack()
+            ctk.CTkLabel(f_out, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200).pack(padx=10, pady=(4, 8))
+        else:
+            ctk.CTkLabel(f_out, text="Limpios", font=(FONTS.family, 10, "bold"), text_color=COLORS.success).pack()
+            ctk.CTkLabel(f_out, text="No se detectaron valores fuera de rango.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
+
+        # --- B. REDUNDANCIA ---
+        colin = diag["colinealidad"]
+        color_col = COLORS.warning if colin else COLORS.success
+        f_col = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=color_col)
+        f_col.grid(row=0, column=1, padx=4, sticky="nsew")
+
+        ctk.CTkLabel(f_col, text="Redundancia", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        if colin:
+            msg = colin[0]["mensaje"]
+            ctk.CTkLabel(f_col, text="SUGERENCIA", font=(FONTS.family, 10, "bold"), text_color=COLORS.warning).pack()
+            ctk.CTkLabel(f_col, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200).pack(padx=10, pady=(4, 8))
+        else:
+            ctk.CTkLabel(f_col, text="Óptimas", font=(FONTS.family, 10, "bold"), text_color=COLORS.success).pack()
+            ctk.CTkLabel(f_col, text="Las variables aportan información única al modelo.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
+
+        # --- C. ESTACIONALIDAD ---
+        est = diag["estacionalidad"]
+        f_est = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=COLORS.primary)
+        f_est.grid(row=0, column=2, padx=(8, 0), sticky="nsew")
+
+        ctk.CTkLabel(f_est, text="Patrones Mensuales", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        if est:
+            ctk.CTkLabel(f_est, text="INFO", font=(FONTS.family, 10, "bold"), text_color=COLORS.primary).pack()
+            if est["pico"] == "N/A":
+                msg = est["mensaje"]
+            else:
+                msg = f"Mayor consumo: {est['pico']}\nMenor consumo: {est['valle']}"
+            ctk.CTkLabel(f_est, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200).pack(padx=10, pady=(4, 8))
+        else:
+            ctk.CTkLabel(f_est, text="No detectado", font=(FONTS.family, 10, "bold"), text_color=COLORS.text_secondary).pack()
+            ctk.CTkLabel(f_est, text="Datos insuficientes para análisis estacional.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
 
     # ── Card tabla Pearson ────────────────────────────────────────────────────
     def _build_card_tabla(self, parent, fila):
@@ -371,9 +439,20 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         canvas = FigureCanvasTkAgg(fig, master=card)
         canvas.draw()
         canvas.get_tk_widget().pack(
-            fill="both", expand=True, padx=16, pady=(0, 16)
+            fill="both", expand=True, padx=16, pady=(0, 4)
         )
         plt.close(fig)
+
+        # NOTA EXPLICATIVA (Insight)
+        ctk.CTkLabel(
+            card,
+            text="💡 Análisis de Sincronía: Observa si los picos y valles de las variables independientes "
+                 "coinciden con los del consumo. Si las líneas se mueven en la misma dirección, "
+                 "la variable tiene una fuerte influencia predictiva.",
+            font=(FONTS.family, FONTS.size_xs, "italic"),
+            text_color=COLORS.text_secondary,
+            wraplength=800, justify="left"
+        ).pack(padx=16, pady=(0, 16), anchor="w")
 
     def _crear_sincronia(self, datos, var_dep):
         fechas = datos["fechas"]

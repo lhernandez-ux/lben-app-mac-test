@@ -188,6 +188,129 @@ def recomendar_modelo(resultados: list[dict]) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ANÁLISIS AVANZADO (OUTLIERS, COLINEALIDAD, PATRONES)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def obtener_diagnostico_avanzado(df: pd.DataFrame, var_dep: str, vars_ind: list[str]) -> dict:
+    """
+    Ejecuta un diagnóstico completo de la calidad de los datos.
+    """
+    return {
+        "outliers":      detectar_outliers(df, var_dep),
+        "colinealidad":  detectar_colinealidad(df, vars_ind),
+        "estacionalidad": analizar_estacionalidad(df, var_dep)
+    }
+
+def detectar_outliers(df: pd.DataFrame, col: str) -> dict:
+    """
+    Detecta valores atípicos usando el método IQR (Rango Intercuartílico).
+    """
+    if col not in df.columns: return {"conteo": 0, "mensajes": []}
+    
+    y = pd.to_numeric(df[col], errors="coerce").dropna()
+    if len(y) < 5: return {"conteo": 0, "mensajes": []}
+
+    q1 = y.quantile(0.25)
+    q3 = y.quantile(0.75)
+    iqr = q3 - q1
+    limite_inf = q1 - 1.5 * iqr
+    limite_sup = q3 + 1.5 * iqr
+
+    outliers_mask = (y < limite_inf) | (y > limite_sup)
+    indices = y[outliers_mask].index.tolist()
+    
+    mensajes = []
+    if len(indices) > 0:
+        for idx in indices:
+            fecha_str = df.loc[idx, "Fecha"] if "Fecha" in df.columns else f"registro {idx+1}"
+            valor = y[idx]
+            tipo = "inusualmente alto" if valor > limite_sup else "inusualmente bajo"
+            mensajes.append(f"El {fecha_str} se detectó un consumo {tipo} ({valor:,.0f}).")
+            
+    return {
+        "conteo": len(indices),
+        "indices": indices,
+        "mensajes": mensajes,
+        "limites": (limite_inf, limite_sup)
+    }
+
+def detectar_colinealidad(df: pd.DataFrame, vars_ind: list[str], threshold: float = 0.85) -> list:
+    """
+    Detecta si dos variables independientes son muy parecidas (redundantes).
+    """
+    alertas = []
+    v_validas = [v for v in vars_ind if v in df.columns]
+    
+    if len(v_validas) < 2: return alertas
+
+    # Matriz de correlación solo para variables independientes
+    corr_matrix = df[v_validas].apply(pd.to_numeric, errors="coerce").corr().abs()
+
+    parejas_vistas = set()
+    for i in range(len(v_validas)):
+        for j in range(i + 1, len(v_validas)):
+            v1, v2 = v_validas[i], v_validas[j]
+            r = corr_matrix.loc[v1, v2]
+            if r > threshold:
+                alertas.append({
+                    "variables": (v1, v2),
+                    "r": round(r, 2),
+                    "mensaje": f"'{v1}' y '{v2}' son muy similares (r={r:.2f}). Usar ambas podría confundir al modelo."
+                })
+    return alertas
+
+def analizar_estacionalidad(df: pd.DataFrame, col: str) -> dict:
+    """
+    Identifica meses de mayor y menor consumo (valle y pico).
+    """
+    if col not in df.columns: return {}
+    
+    # Intentar extraer el mes si la columna Fecha existe
+    df_copy = df.copy()
+    df_copy[col] = pd.to_numeric(df_copy[col], errors="coerce")
+    
+    try:
+        if "Fecha" in df_copy.columns:
+            # Intentar detectar separador / o -
+            def extraer_mes(x):
+                s = str(x)
+                if "/" in s: return int(s.split("/")[0])
+                if "-" in s: return int(s.split("-")[0])
+                return 0
+            
+            df_copy["Mes_Num"] = df_copy["Fecha"].apply(extraer_mes)
+            
+            # Quitar meses 0
+            df_copy = df_copy[df_copy["Mes_Num"] > 0]
+            if df_copy.empty: return {}
+
+            promedio_mensual = df_copy.groupby("Mes_Num")[col].mean()
+            
+            # Análisis de variabilidad
+            cv = y.std() / y.mean() if y.mean() != 0 else 0
+            if cv < 0.05: # Coeficiente de variación < 5%
+                return {
+                    "pico": "N/A", "valle": "N/A",
+                    "mensaje": "Consumo altamente estable. No se detectan ciclos estacionales marcados."
+                }
+
+            mes_pico = promedio_mensual.idxmax()
+            mes_valle = promedio_mensual.idxmin()
+            
+            meses_nombres = ["?", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+                             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+            
+            return {
+                "pico": meses_nombres[mes_pico],
+                "valle": meses_nombres[mes_valle],
+                "mensaje": f"Tendencia detectada: El mes de mayor consumo suele ser {meses_nombres[mes_pico]}."
+            }
+    except:
+        pass
+    return {"pico": "No detectado", "valle": "No detectado", "mensaje": "Datos insuficientes para análisis estacional."}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # DATOS PARA GRÁFICOS
 # ═══════════════════════════════════════════════════════════════════════════════
 

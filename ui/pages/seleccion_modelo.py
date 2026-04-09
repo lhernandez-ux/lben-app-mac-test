@@ -137,12 +137,10 @@ class SeleccionModeloPage(ctk.CTkFrame):
                     "Calcula el consumo en función de una o más "
                     "variables independientes estadísticamente "
                     "significativas.\n\n"
-                    "Puede detectar relaciones complejas entre "
-                    "variables y permite detectar ahorros "
-                    "estadísticamente precisos."
+                    "Puede detectar relaciones complejas entre variables"
                 ),
                 "variables": "Consumo + 1 o más variables significativas",
-                "recomendado_para": "Edificios con múltiples factores o variables disponibles",
+                "recomendado_para": "Edificios con múltiples variables disponibles",
                 "destino": "m3_config"
             }
         ]
@@ -259,14 +257,19 @@ class SeleccionModeloPage(ctk.CTkFrame):
             justify="center"
         ).grid(row=5, column=0, padx=16, pady=(0, 16))
 
-        # Variables
+        # --- FILA ELÁSTICA (ESPACIADOR) ---
+        # Fila 6 absorbe espacio y empuja lo demás al fondo
+        card.grid_rowconfigure(6, weight=1)
+        ctk.CTkFrame(card, fg_color="transparent", height=1).grid(row=6, column=0)
+
+        # Variables (Cuadro Gris)
         info_frame = ctk.CTkFrame(
             card,
             fg_color=COLORS.primary_dark if es_recomendado else COLORS.bg_main,
             corner_radius=8
         )
-        info_frame.grid(row=6, column=0, sticky="ew",
-                        padx=16, pady=(0, 8))
+        info_frame.grid(row=7, column=0, sticky="ew",
+                        padx=16, pady=(0, 12))
 
         ctk.CTkLabel(
             info_frame,
@@ -309,4 +312,4 @@ class SeleccionModeloPage(ctk.CTkFrame):
             corner_radius=DIMS.button_radius,
             height=40,
             command=lambda d=modelo["destino"]: self.app.navegar(d)
-        ).grid(row=7, column=0, padx=16, pady=(8, 20), sticky="ew")
+        ).grid(row=8, column=0, padx=16, pady=(0, 20), sticky="ew")
