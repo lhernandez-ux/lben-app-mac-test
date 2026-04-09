@@ -259,55 +259,115 @@ def detectar_colinealidad(df: pd.DataFrame, vars_ind: list[str], threshold: floa
                 })
     return alertas
 
+def analizar_tendencia(df: pd.DataFrame, col: str) -> dict:
+    """
+    Calcula la tendencia lineal del consumo (creciente, decreciente o estacionaria).
+    """
+    if col not in df.columns: return {"clase": "N/D", "pendiente": 0}
+    
+    y = pd.to_numeric(df[col], errors="coerce").dropna().values
+    if len(y) < 3: return {"clase": "Insuficiente", "pendiente": 0}
+
+    # Normalizar y para que la pendiente sea comparable
+    y_norm = (y - y.min()) / (y.max() - y.min()) if (y.max() - y.min()) != 0 else y
+    x = np.arange(len(y_norm))
+    
+    slope, *_ = stats.linregress(x, y_norm)
+    
+    if slope > 0.015:
+        clase = "Creciente"
+        desc = "Tendencia Creciente a largo plazo."
+    elif slope < -0.015:
+        clase = "Decreciente"
+        desc = "Tendencia Decreciente a largo plazo."
+    else:
+        clase = "Estacionaria"
+        desc = "Comportamiento Estacionario a largo plazo."
+        
+    return {"clase": clase, "descripcion": desc, "pendiente": round(slope, 4)}
+
 def analizar_estacionalidad(df: pd.DataFrame, col: str) -> dict:
     """
-    Identifica meses de mayor y menor consumo (valle y pico).
+    Identifica el tipo de ciclo (Unimodal, Bimodal, Estable) y meses críticos.
+    Basado en el promedio mensual y umbrales de picos.
     """
-    if col not in df.columns: return {}
+    if col not in df.columns: return {"pico": "N/D", "valle": "N/D", "tipo": "N/D", "mensaje": "Sin datos"}
     
-    # Intentar extraer el mes si la columna Fecha existe
     df_copy = df.copy()
     df_copy[col] = pd.to_numeric(df_copy[col], errors="coerce")
     
     try:
         if "Fecha" in df_copy.columns:
-            # Intentar detectar separador / o -
-            def extraer_mes(x):
-                s = str(x)
-                if "/" in s: return int(s.split("/")[0])
-                if "-" in s: return int(s.split("-")[0])
-                return 0
+            fechas_dt = pd.to_datetime(df_copy["Fecha"], errors='coerce')
+            df_copy["Mes_Num"] = fechas_dt.dt.month
             
-            df_copy["Mes_Num"] = df_copy["Fecha"].apply(extraer_mes)
-            
-            # Quitar meses 0
-            df_copy = df_copy[df_copy["Mes_Num"] > 0]
-            if df_copy.empty: return {}
+            df_val = df_copy[df_copy["Mes_Num"].notna()].copy()
+            if df_val.empty: return {"pico": "N/D", "valle": "N/D", "tipo": "N/D", "mensaje": "Fecha inválida"}
 
-            promedio_mensual = df_copy.groupby("Mes_Num")[col].mean()
+            promedios = df_val.groupby("Mes_Num")[col].mean()
+            global_avg = df_val[col].mean()
             
-            # Análisis de variabilidad
-            cv = y.std() / y.mean() if y.mean() != 0 else 0
-            if cv < 0.05: # Coeficiente de variación < 5%
-                return {
-                    "pico": "N/A", "valle": "N/A",
-                    "mensaje": "Consumo altamente estable. No se detectan ciclos estacionales marcados."
-                }
-
-            mes_pico = promedio_mensual.idxmax()
-            mes_valle = promedio_mensual.idxmin()
-            
+            # Identificar Picos (> 1.15 x promedio)
+            picos_indices = promedios[promedios > (global_avg * 1.15)].index.tolist()
             meses_nombres = ["?", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
                              "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+            
+            n_picos = len(picos_indices)
+            if n_picos == 1:
+                tipo = "Ciclo Unimodal"
+                detalle = f"Un solo periodo de alta demanda detectado en {meses_nombres[picos_indices[0]]}."
+            elif n_picos == 2:
+                tipo = "Ciclo Bimodal"
+                detalle = f"Dos temporadas de alta demanda en {meses_nombres[picos_indices[0]]} y {meses_nombres[picos_indices[1]]}."
+            elif n_picos > 2:
+                tipo = "Alta Volatilidad"
+                detalle = "Consumo irregular con múltiples fluctuaciones significativas."
+            else:
+                tipo = "Estable / Plano"
+                detalle = "Carga constante: Ningún mes se aleja más del 15% del promedio anual."
+
+            mes_pico = int(promedios.idxmax())
+            mes_valle = int(promedios.idxmin())
             
             return {
                 "pico": meses_nombres[mes_pico],
                 "valle": meses_nombres[mes_valle],
-                "mensaje": f"Tendencia detectada: El mes de mayor consumo suele ser {meses_nombres[mes_pico]}."
+                "tipo": tipo,
+                "mensaje": detalle,
+                "tendencia": analizar_tendencia(df, col)
             }
-    except:
-        pass
-    return {"pico": "No detectado", "valle": "No detectado", "mensaje": "Datos insuficientes para análisis estacional."}
+    except Exception as e:
+        print(f"Error estacionalidad: {e}")
+    
+    return {"pico": "N/D", "valle": "N/D", "tipo": "N/D", "mensaje": "Error en cálculo de ciclos"}
+
+def calcular_puntajes_sincronia(resultados_pearson: list[dict]) -> dict:
+    """
+    Convierte r de Pearson en un diagnóstico de sincronía (Directa/Inversa).
+    """
+    diagnosticos = {}
+    for r in resultados_pearson:
+        val = r["r_pearson"]
+        if val is not None:
+            # Magnitud
+            mag = abs(val) * 100
+            if mag < 40:
+                nivel = "Baja / Independiente"
+                tipo = "Independiente"
+            elif mag < 75:
+                nivel = "Moderada"
+                tipo = "Directa" if val > 0 else "Inversa"
+            else:
+                nivel = "Alta"
+                tipo = "Directa" if val > 0 else "Inversa"
+            
+            diagnosticos[r["variable"]] = {
+                "porcentaje": round(mag, 1),
+                "nivel": nivel,
+                "tipo": tipo,
+                "mensaje": f"{nivel} ({tipo})" if tipo != "Independiente" else nivel
+            }
+    return diagnosticos
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
