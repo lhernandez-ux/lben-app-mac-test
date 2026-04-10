@@ -86,20 +86,29 @@ def procesar_m1(df_base: pd.DataFrame, df_monitoreo: pd.DataFrame = None):
 
     # 2. Filtrado Estadístico por Mes (Lógica Res. 016)
     resultados_lben = []
+    excluidos_lista = []
+    
+    # Identificar excluidos manuales antes del bucle
+    # Estos ya fueron quitados de dfb en la linea: dfb = dfb[~dfb['Excluir']].copy()
+    # Pero los necesitamos para el reporte. Vamos a usar el df inicial.
+    
+    # Re-leemos los manuales del df_base original
+    df_man = df_base[df_base[df_base.columns[7]].astype(str).str.upper() == 'SI'].copy()
+    for _, row in df_man.iterrows():
+        excluidos_lista.append({'Fecha': row[df_base.columns[0]], 'Consumo': row[df_base.columns[1]], 'Motivo': 'Manual'})
+
     meses_indices = range(1, 13)
     meses_nombres = ["?", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
                      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
-    total_datos_iniciales = len(dfb.dropna(subset=['Ajustado']))
-    
     for m_idx in meses_indices:
-        datos_mes = dfb[dfb['Month'] == m_idx]['Ajustado'].dropna()
+        datos_mes = dfb[dfb['Month'] == m_idx]['Ajustado']
         n_mes = len(datos_mes)
         
         if n_mes == 0:
             resultados_lben.append({
-                'mes': meses_nombres[m_idx], 'lben': 0, 'n_usados': 0, 'n_ini': 0,
-                'lim_inf': 0, 'lim_sup': 0, 'min_hist': 0
+                'mes': meses_nombres[m_idx], 'lben':0, 'n_usados':0, 'n_ini':0,
+                'lim_inf':0, 'lim_sup':0, 'min_hist':0, 'max_hist':0
             })
             continue
             
@@ -108,16 +117,23 @@ def procesar_m1(df_base: pd.DataFrame, df_monitoreo: pd.DataFrame = None):
         
         # Filtro Res. 016
         if n_mes < 10:
-            # +/- 10%
             f_mask = (datos_mes >= mean_val * 0.9) & (datos_mes <= mean_val * 1.1)
         else:
-            # +/- 2 SD
             f_mask = (datos_mes >= mean_val - 2*std_val) & (datos_mes <= mean_val + 2*std_val)
             
         filtered = datos_mes[f_mask]
         n_final = len(filtered)
-        lben_mes = filtered.mean() if n_final > 0 else mean_val
+        lben_mes = filtered.mean() if n_final > 0 else 0
         
+        # Capturar excluidos estadísticos
+        outliers = datos_mes[~f_mask]
+        for idx in outliers.index:
+            excluidos_lista.append({
+                'Fecha': dfb.loc[idx, dfb.columns[0]], 
+                'Consumo': dfb.loc[idx, 'Consumo_Num'], 
+                'Motivo': 'Estadístico'
+            })
+
         resultados_lben.append({
             'mes': meses_nombres[m_idx],
             'lben': lben_mes,
@@ -130,6 +146,7 @@ def procesar_m1(df_base: pd.DataFrame, df_monitoreo: pd.DataFrame = None):
         })
         
     df_lben = pd.DataFrame(resultados_lben)
+    df_excluidos = pd.DataFrame(excluidos_lista)
     
     # 3. Monitoreo
     res_monitoreo = None
@@ -179,7 +196,7 @@ def procesar_m1(df_base: pd.DataFrame, df_monitoreo: pd.DataFrame = None):
         
         res_monitoreo = dfm
 
-    return df_lben, res_monitoreo, dfb
+    return df_lben, res_monitoreo, dfb, df_excluidos
 
 def calcular_resumen_metricas(df_lben, df_base_raw):
     """Calcula el resumen granular para la Ficha Técnica."""

@@ -198,103 +198,62 @@ def escribir_resultados_exploratorios(path, recomendacion, justificacion, tabla_
     wb.save(path)
     return True
 
-def escribir_resultados_m1(path, df_lben, df_mon, df_base_final, meta_resumen, data_config):
-    """Escribe los resultados M1 en el Excel con formato numérico."""
+def escribir_resultados_m1(path, df_lben, df_mon, df_base_f, df_excluidos, meta, config):
     if not os.path.exists(path): return False
     wb = load_workbook(path)
     fmt_num = "#,##0.00"
 
-    # 1. Hoja Período_Base: Llenar K y L con formato
-    if df_base_final is not None:
+    # 1. Hoja Período_Base: Llenar K y L
+    if df_base_f is not None:
         ws_base = wb["Período_Base"]
-        for i, row in df_base_final.iterrows():
+        for i, row in df_base_f.iterrows():
             f = 8 + i
-            # Escribir y aplicar formato miles/2-dec
-            for col_let in ["K", "L"]:
-                celda = ws_base[f"{col_let}{f}"]
-                val = row.get("Normalizado") if col_let == "K" else row.get("Ajustado")
-                celda.value = val
-                celda.number_format = fmt_num
+            ws_base[f"K{f}"].value = row.get("Normalizado"); ws_base[f"K{f}"].number_format = fmt_num
+            ws_base[f"L{f}"].value = row.get("Ajustado"); ws_base[f"L{f}"].number_format = fmt_num
 
     # 2. Hoja Modelo_LBEn: Ficha Técnica (K5:M10)
     ws_mod = wb["Modelo_LBEn"]
-    
-    # Identificación Proyecto
-    ws_mod["D5"] = data_config.get("nombre"); ws_mod["D6"] = data_config.get("fuente"); ws_mod["D7"] = data_config.get("unidad")
-    
-    # Columna K: Métricas de Datos
+    ws_mod["D5"] = config.get("nombre"); ws_mod["D6"] = config.get("fuente"); ws_mod["D7"] = config.get("unidad")
     ws_mod["K5"] = "M1 (Consumo Absoluto)"
-    ws_mod["K6"] = meta_resumen.get("n_inicial")
-    ws_mod["K7"] = meta_resumen.get("n_filt_est")
-    ws_mod["K8"] = meta_resumen.get("n_filt_man")
-    ws_mod["K9"] = meta_resumen.get("n_final")
-    ws_mod["K10"].value = meta_resumen.get("fiabilidad")
-    ws_mod["K10"].number_format = "0.0%"
-
-    # Columna M: Periodo y Energía
-    ws_mod["M5"] = data_config.get("pb_ini")
-    ws_mod["M6"] = data_config.get("pb_fin")
-    
-    c_prom = meta_resumen.get("consumo_promedio_anual", 0)
+    ws_mod["K6"] = meta.get("n_inicial"); ws_mod["K7"] = meta.get("n_filt_est"); ws_mod["K8"] = meta.get("n_filt_man"); ws_mod["K9"] = meta.get("n_final")
+    ws_mod["K10"].value = meta.get("fiabilidad"); ws_mod["K10"].number_format = "0.0%"
+    ws_mod["M5"] = config.get("pb_ini"); ws_mod["M6"] = config.get("pb_fin")
+    c_prom = meta.get("consumo_promedio_anual", 0)
     ws_mod["M7"].value = c_prom; ws_mod["M7"].number_format = fmt_num
-    
-    a_kwh = meta_resumen.get("potencial_ahorro_kwh", 0)
-    ws_mod["M8"].value = a_kwh; ws_mod["M8"].number_format = fmt_num
-    
-    a_pct = meta_resumen.get("potencial_ahorro_pct", 0)
-    ws_mod["M9"].value = a_pct; ws_mod["M9"].number_format = "0.0%"
-    
-    m15 = meta_resumen.get("meta_15", 0)
-    ws_mod["M10"].value = m15; ws_mod["M10"].number_format = fmt_num
+    ws_mod["M8"].value = meta.get("potencial_ahorro_kwh", 0); ws_mod["M8"].number_format = fmt_num
+    ws_mod["M9"].value = meta.get("potencial_ahorro_pct", 0); ws_mod["M9"].number_format = "0.0%"
+    ws_mod["M10"].value = meta.get("meta_15", 0); ws_mod["M10"].number_format = fmt_num
 
-    # Tablas Modelo (B16:F27 y J16:L28)
+    # Tablas Modelo
     for i, row in df_lben.iterrows():
         f = 16 + i
-        # Tabla LBEn (C16:F27)
-        # Cambiado: E -> min_hist, F -> max_hist
         for col_l, field in zip(["C", "D", "E", "F"], ["lben", "n_usados", "min_hist", "max_hist"]):
             c = ws_mod[f"{col_l}{f}"]
-            c.value = row[field]
-            if field != "n_usados": c.number_format = fmt_num
-            
-        # Tabla Ahorro (J16:M28)
-        ahorro_val = row['lben'] - row['min_hist']
+            c.value = row[field]; c.number_format = fmt_num if field != "n_usados" else "0"
+        ahorro_v = row['lben'] - row['min_hist']
         ws_mod[f"J{f}"].value = row['lben']; ws_mod[f"J{f}"].number_format = fmt_num
         ws_mod[f"K{f}"].value = row['min_hist']; ws_mod[f"K{f}"].number_format = fmt_num
-        ws_mod[f"L{f}"].value = ahorro_val; ws_mod[f"L{f}"].number_format = fmt_num
-        if row['lben'] > 0:
-            ws_mod[f"M{f}"].value = ahorro_val / row['lben']
-            ws_mod[f"M{f}"].number_format = "0.0%"
+        ws_mod[f"L{f}"].value = ahorro_v; ws_mod[f"L{f}"].number_format = fmt_num
+        if row['lben'] > 0: ws_mod[f"M{f}"].value = ahorro_v / row['lben']; ws_mod[f"M{f}"].number_format = "0.0%"
     
-    # Totales
-    total_min = df_lben['min_hist'].sum()
-    ws_mod["J28"].value = c_prom; ws_mod["J28"].number_format = fmt_num
-    ws_mod["K28"].value = total_min; ws_mod["K28"].number_format = fmt_num
-    ahorro_anual = (df_lben['lben'] - df_lben['min_hist']).sum()
-    ws_mod["L28"].value = ahorro_anual; ws_mod["L28"].number_format = fmt_num
-    if c_prom > 0: 
-        ws_mod["M28"].value = ahorro_anual / c_prom
-        ws_mod["M28"].number_format = "0.0%"
+    # Informe de Datos Excluidos (B35:D35)
+    if df_excluidos is not None and not df_excluidos.empty:
+        for i, row in df_excluidos.iterrows():
+            f = 35 + i
+            ws_mod[f"B{f}"] = row['Fecha']
+            ws_mod[f"D{f}"].value = row['Consumo']; ws_mod[f"D{f}"].number_format = fmt_num
 
-    # 3. Monitoreo Triple Meta (L:U)
+    # 3. Monitoreo Triple Meta
     if df_mon is not None and not df_mon.empty:
         ws_mon = wb["Monitoreo"]
         for i, row in df_mon.iterrows():
             f = 8 + i
-            cols_map = {
-                "L": "Normalizado", "M": "Ajustado", "N": "LBEn_Mes", 
-                "O": "Desemp_kWh", "P": "Desemp_Pct", "Q": "CUSUM_kWh",
-                "R": "Desemp_COP", "S": "CUSUM_COP", "T": "Desemp_CO2", "U": "CUSUM_CO2"
-            }
+            cols_map = {"L": "Normalizado", "M": "Ajustado", "N": "LBEn_Mes", "O": "Desemp_kWh", "P": "Desemp_Pct", "Q": "CUSUM_kWh", "R": "Desemp_COP", "S": "CUSUM_COP", "T": "Desemp_CO2", "U": "CUSUM_CO2"}
             for let, field in cols_map.items():
                 c = ws_mon[f"{let}{f}"]
                 val = row.get(field, 0)
-                if field == "Desemp_Pct": 
-                    c.value = val/100
-                    c.number_format = "0.0%"
-                else:
-                    c.value = val
-                    c.number_format = fmt_num
+                if field == "Desemp_Pct": c.value = val/100; c.number_format = "0.0%"
+                else: c.value = val; c.number_format = fmt_num
 
     try:
         wb.save(path)

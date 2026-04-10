@@ -23,6 +23,7 @@ class M1ResultadosPage(ctk.CTkFrame):
         self.df_mon     = self.app.session.get("df_monitoreo")
         self.df_base    = self.app.session.get("df_base_raw")
         self.df_base_f  = self.app.session.get("df_base_final")
+        self.df_excl    = self.app.session.get("df_excluidos")
         self.metricas   = self.app.session.get("metricas_m1")
         self.config     = {
             "nombre": self.app.session.get("nombre", "Proyecto sin nombre"),
@@ -164,10 +165,15 @@ class M1ResultadosPage(ctk.CTkFrame):
 
     def _guardar_excel(self):
         path = self.app.session.get("excel_path")
-        if not path: return
+        # Llamar a la función actualizada con todos los parámetros
         ok = escribir_resultados_m1(
-            path=path, df_lben=self.df_lben, df_mon=self.df_mon, 
-            df_base_final=self.df_base_f, meta_resumen=self.metricas, data_config=self.config
+            path=path, 
+            df_lben=self.df_lben, 
+            df_mon=self.df_mon, 
+            df_base_f=self.df_base_f,
+            df_excluidos=self.df_excl,
+            meta=self.metricas, 
+            config=self.config
         )
         if ok: messagebox.showinfo("Éxito", f"Reporte guardado en:\n{path}")
         else: messagebox.showerror("Error", "No se pudo guardar el archivo.")

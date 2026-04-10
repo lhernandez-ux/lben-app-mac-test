@@ -1,13 +1,14 @@
 """
 ui/pages/m1_carga.py
 ====================
-Pantalla de carga y validación de datos para el Modelo M1.
+Página de carga de datos para el Modelo M1.
+Permite seleccionar el archivo Excel y previsualizar los registros.
 """
 
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
-from ui.theme import COLORS, FONTS, DIMS
 import pandas as pd
+from ui.theme import COLORS, FONTS, DIMS
 from core.models.m1_absoluto import procesar_m1, calcular_resumen_metricas
 
 class M1CargaPage(ctk.CTkFrame):
@@ -17,56 +18,51 @@ class M1CargaPage(ctk.CTkFrame):
         self.df_base = None
         self.df_monitoreo = None
         self.meta = {}
+
         self._build()
 
     def _build(self):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
-        self._build_topbar()
-        self._build_cuerpo()
 
-    def _build_topbar(self):
-        topbar = ctk.CTkFrame(self, fg_color=COLORS.bg_card, corner_radius=0, height=DIMS.topbar_height)
-        topbar.grid(row=0, column=0, sticky="ew")
-        topbar.grid_propagate(False)
-        topbar.grid_columnconfigure(1, weight=1)
-
-        ctk.CTkFrame(topbar, fg_color=COLORS.accent, height=2).place(relx=0, rely=1.0, relwidth=1.0, anchor="sw")
+        # Header
+        header = ctk.CTkFrame(self, fg_color=COLORS.bg_card, corner_radius=0, height=DIMS.topbar_height)
+        header.grid(row=0, column=0, sticky="ew")
+        header.grid_propagate(False)
 
         ctk.CTkButton(
-            topbar, text="← Configuración", font=(FONTS.family, FONTS.size_sm),
+            header, text="← Configuración", font=(FONTS.family, FONTS.size_sm),
             fg_color="transparent", text_color=COLORS.primary, hover_color=COLORS.bg_main,
             width=120, height=32, command=lambda: self.app.navegar("m1_config")
-        ).grid(row=0, column=0, padx=16, pady=8, sticky="w")
+        ).place(x=10, y=14)
 
         ctk.CTkLabel(
-            topbar, text="Modelo M1: Carga de Datos",
+            header, text="Modelo M1: Carga de Datos",
             font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.primary
-        ).grid(row=0, column=1, sticky="w", padx=8)
+        ).place(relx=0.5, rely=0.5, anchor="center")
 
-    def _build_cuerpo(self):
+        # Cuerpo
         self.cuerpo = ctk.CTkFrame(self, fg_color="transparent")
-        self.cuerpo.grid(row=1, column=0, sticky="nsew", padx=48, pady=24)
+        self.cuerpo.grid(row=1, column=0, sticky="nsew", padx=40, pady=20)
         self.cuerpo.grid_columnconfigure(0, weight=1)
 
-        # ── Zona de Carga ─────────────────────────────────────────────────────
-        self.zona_carga = ctk.CTkFrame(self.cuerpo, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
-        self.zona_carga.grid(row=0, column=0, sticky="ew", pady=(0, 24))
-        self.zona_carga.grid_columnconfigure(0, weight=1)
-
+        # Zona de Selección
+        self.card_selección = ctk.CTkFrame(self.cuerpo, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
+        self.card_selección.grid(row=0, column=0, sticky="ew", pady=(0, 20))
+        
         ctk.CTkLabel(
-            self.zona_carga, text="Selecciona el archivo Excel M1 con tus datos",
+            self.card_selección, text="Selecciona el archivo Excel M1 con tus datos",
             font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_secondary
-        ).pack(pady=(20, 10))
+        ).pack(pady=(30, 10))
 
         self.btn_seleccionar = ctk.CTkButton(
-            self.zona_carga, text="📂 Seleccionar Archivo",
-            font=(FONTS.family, FONTS.size_md, "bold"), fg_color=COLORS.primary,
-            height=40, command=self._seleccionar_archivo
+            self.card_selección, text="📂 Seleccionar Archivo",
+            font=(FONTS.family, FONTS.size_sm, "bold"), fg_color=COLORS.primary,
+            text_color="white", height=40, command=self._seleccionar_archivo
         )
-        self.btn_seleccionar.pack(pady=(0, 20))
+        self.btn_seleccionar.pack(pady=(0, 30))
 
-        # ── Zona de Resumen (oculta inicialmente) ─────────────────────────────
+        # Zona Resumen (se llena al cargar)
         self.zona_resumen = ctk.CTkFrame(self.cuerpo, fg_color="transparent")
         self.zona_resumen.grid_columnconfigure((0, 1), weight=1)
 
@@ -93,32 +89,43 @@ class M1CargaPage(ctk.CTkFrame):
         for widget in self.zona_resumen.winfo_children(): widget.destroy()
         self.zona_resumen.grid(row=1, column=0, sticky="nsew")
 
-        # Card Info Proyecto
+        # Card Info Proyecto (Izquierda)
         card_info = ctk.CTkFrame(self.zona_resumen, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
         card_info.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
         
         ctk.CTkLabel(card_info, text="Información del Proyecto", font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary).pack(pady=10)
         
-        info_text = (
-            f"📍 Entidad: {self.meta.get('entidad', 'N/A')}\n"
-            f"⚡ Fuente: {self.meta.get('fuente', 'N/A')}\n"
-            f"📏 Unidad: {self.meta.get('unidad', 'N/A')}\n"
-            f"📅 Periodo Base: {self.meta.get('periodo_base_text', 'N/A')}"
-        )
-        ctk.CTkLabel(card_info, text=info_text, justify="left", font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_primary).pack(padx=20, pady=(0, 20))
+        # Sincronizar con la sesión para que NO salgan los guiones
+        entidad = self.meta.get('entidad') or self.app.session.get('nombre', '---')
+        fuente = self.meta.get('fuente') or self.app.session.get('fuente', '---')
+        unidad = self.meta.get('unidad') or self.app.session.get('unidad', '---')
+        pb_ini = self.app.session.get("pb_ini", "---")
+        pb_fin = self.app.session.get("pb_fin", "---")
 
-        # Card Estadísticas Datos
+        items = [
+            (f"🏢 Entidad: {entidad}",),
+            (f"⚡ Fuente: {fuente}",),
+            (f"📏 Unidad: {unidad}",),
+            (f"📅 Periodo Base: {pb_ini} - {pb_fin}",)
+        ]
+        for i, (txt,) in enumerate(items):
+            pady = 2 if i < len(items)-1 else (2, 20)
+            ctk.CTkLabel(card_info, text=txt, font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_primary).pack(anchor="w", padx=40, pady=pady)
+
+        # Card Resumen de Datos (Derecha)
         card_stats = ctk.CTkFrame(self.zona_resumen, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
         card_stats.grid(row=0, column=1, sticky="nsew", padx=(12, 0))
         
         ctk.CTkLabel(card_stats, text="Resumen de Datos", font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary).pack(pady=10)
         
-        stats_text = (
-            f"📊 Registros Periodo Base: {len(self.df_base)}\n"
-            f"📈 Registros Monitoreo: {len(self.df_monitoreo)}\n"
-            f"✅ Columnas encontradas: {len(self.df_base.columns)}"
-        )
-        ctk.CTkLabel(card_stats, text=stats_text, justify="left", font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_primary).pack(padx=20, pady=(0, 20))
+        stats = [
+            (f"📊 Registros Periodo Base: {len(self.df_base)}",),
+            (f"📈 Registros Monitoreo: {len(self.df_monitoreo)}",),
+            (f"✅ Columnas encontradas: {len(self.df_base.columns)}",)
+        ]
+        for i, (txt,) in enumerate(stats):
+            pady = 2 if i < len(stats)-1 else (2, 20)
+            ctk.CTkLabel(card_stats, text=txt, font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_primary).pack(anchor="w", padx=40, pady=pady)
 
         # Botón Procesar
         ctk.CTkButton(
@@ -134,18 +141,19 @@ class M1CargaPage(ctk.CTkFrame):
 
         try:
             # Ejecutar el motor de cálculo
-            df_lben, df_mon_res, df_base_final = procesar_m1(self.df_base, self.df_monitoreo)
+            df_lben, df_mon_res, df_base_final, df_excluidos = procesar_m1(self.df_base, self.df_monitoreo)
             
             # Calcular métricas para la ficha técnica
             metricas = calcular_resumen_metricas(df_lben, self.df_base)
             
             # Guardar todo en sesión
             self.app.session["df_base_raw"] = self.df_base
-            self.app.session["df_base_final"] = df_base_final # Nueva columna K y L procesada
+            self.app.session["df_base_final"] = df_base_final
+            self.app.session["df_excluidos"] = df_excluidos
             self.app.session["df_lben"] = df_lben
             self.app.session["df_monitoreo"] = df_mon_res
-            self.app.session["meta_m1"] = self.meta
             self.app.session["metricas_m1"] = metricas
+            self.app.session["meta_m1"] = self.meta
             
             # Navegar a resultados
             self.app.navegar("m1_resultados")

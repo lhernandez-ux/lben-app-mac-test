@@ -50,7 +50,7 @@ class M1ConfigPage(ctk.CTkFrame):
             topbar, text="🚀 Cargar datos existentes",
             font=(FONTS.family, FONTS.size_sm), fg_color=COLORS.primary,
             text_color=COLORS.text_white, height=32,
-            command=lambda: self.app.navegar("m1_carga")
+            command=self._guardar_y_cargar
         ).grid(row=0, column=2, padx=16, pady=8, sticky="e")
 
     def _build_cuerpo(self):
@@ -128,6 +128,11 @@ class M1ConfigPage(ctk.CTkFrame):
         e.grid(row=1, column=0, sticky="ew")
         return e
 
+    def _guardar_y_cargar(self):
+        # Guardar estado actual antes de navegar
+        self._confirmar_y_descargar(auto=True)
+        self.app.navegar("m1_carga")
+
     def _date_range_picker(self, parent, row):
         f = ctk.CTkFrame(parent, fg_color="transparent")
         f.grid(row=row, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 4))
@@ -145,7 +150,7 @@ class M1ConfigPage(ctk.CTkFrame):
         
         return sel_ini, sel_fin, lbl
 
-    def _confirmar_y_descargar(self):
+    def _confirmar_y_descargar(self, auto=False):
         # Lógica de guardado en sesión y llamada a io_excel
         data = {
             "nombre": self.entry_nombre.get().strip(),
@@ -156,6 +161,11 @@ class M1ConfigPage(ctk.CTkFrame):
             "pr_ini": self.sel_pr_ini.get_value(),
             "pr_fin": self.sel_pr_fin.get_value(),
         }
+
+        # Guardar en sesión
+        self.app.session.update(data)
+        
+        if auto: return # Solo guardamos, no descargamos ni validamos
 
         if not data["nombre"] or not data["fuente"] or not data["unidad"]:
             messagebox.showwarning("Campos faltantes", "Por favor completa la identificación del proyecto.")
