@@ -256,17 +256,27 @@ def escribir_resultados_m1(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
             ws_mod[f"B{f}"] = row['Fecha']
             ws_mod[f"D{f}"].value = row['Consumo']; ws_mod[f"D{f}"].number_format = fmt_num
 
-    # 3. Monitoreo Triple Meta
+    # 3. Monitoreo Triple Meta (L a W)
     if df_mon is not None and not df_mon.empty:
         ws_mon = wb["Monitoreo"]
         for i, row in df_mon.iterrows():
             f = 8 + i
-            cols_map = {"L": "Normalizado", "M": "Ajustado", "N": "LBEn_Mes", "O": "Desemp_kWh", "P": "Desemp_Pct", "Q": "CUSUM_kWh", "R": "Desemp_COP", "S": "CUSUM_COP", "T": "Desemp_CO2", "U": "CUSUM_CO2"}
+            # Mapeo exacto según instrucciones
+            cols_map = {
+                "L": "Normalizado", "M": "Ajustado", "N": "LBEn_Mes", 
+                "O": "Desemp_kWh", "P": "Desemp_Pct", "Q": "CUSUM_kWh",
+                "R": "Avance_Pot", "S": "Avance_15",
+                "T": "Desemp_COP", "U": "CUSUM_COP", "V": "Desemp_CO2", "W": "CUSUM_CO2"
+            }
             for let, field in cols_map.items():
                 c = ws_mon[f"{let}{f}"]
                 val = row.get(field, 0)
-                if field == "Desemp_Pct": c.value = val/100; c.number_format = "0.0%"
-                else: c.value = val; c.number_format = fmt_num
+                if field in ["Desemp_Pct", "Avance_Pot", "Avance_15"]:
+                    c.value = val / 100
+                    c.number_format = "0.0%"
+                else:
+                    c.value = val
+                    c.number_format = fmt_num
 
     try:
         wb.save(path)
