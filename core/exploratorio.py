@@ -298,7 +298,12 @@ def analizar_estacionalidad(df: pd.DataFrame, col: str) -> dict:
     
     try:
         if "Fecha" in df_copy.columns:
-            fechas_dt = pd.to_datetime(df_copy["Fecha"], errors='coerce')
+            # Silenciar el warning de inferencia de formato
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                fechas_dt = pd.to_datetime(df_copy["Fecha"], errors='coerce', dayfirst=True)
+            
             df_copy["Mes_Num"] = fechas_dt.dt.month
             
             df_val = df_copy[df_copy["Mes_Num"].notna()].copy()

@@ -1,8 +1,8 @@
 """
 core/io_excel.py
 ================
-Lectura y escritura de archivos Excel.
-Ruta 1 — Análisis Exploratorio.
+Lectura y escritura de archivos Excel para LBEn.
+Soporta Análisis Exploratorio y Modelo M1 (Consumo Absoluto).
 """
 
 import os
@@ -16,549 +16,291 @@ from openpyxl.styles import (
 )
 from openpyxl.utils import get_column_letter
 
-
 # ── Ruta a la plantilla base ──────────────────────────────────────────────────
 _DIR_DATA = os.path.join(os.path.dirname(__file__), "..", "data")
-_PLANTILLA_M1 = os.path.join(
-    _DIR_DATA, "Plantilla_LBEn_M1_modelo.xlsx"
-)
-
-_PLANTILLA_EXPLORATORIA = os.path.join(
-    _DIR_DATA, "plantilla_exploracion_modelo.xlsx"
-)
-
+_PLANTILLA_M1 = os.path.join(_DIR_DATA, "Plantilla_LBEn_M1_modelo.xlsx")
+_PLANTILLA_EXPLORATORIA = os.path.join(_DIR_DATA, "plantilla_exploracion_modelo.xlsx")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# A — GENERACIÓN DE PLANTILLA EXPLORATORIA
+# A — GENERACIÓN DE PLANTILLAS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def generar_plantilla_exploratoria(
-    nombre_proyecto: str,
-    fecha_ini: str,
-    fecha_fin: str,
-    var_dep: str,
-    vars_ind: list[str]
-) -> bool:
-    """
-    Toma la plantilla base, la personaliza con los parámetros del proyecto
-    y abre el diálogo para que el usuario elija dónde guardarla.
-
-    Retorna True si se guardó correctamente, False si el usuario canceló.
-    """
+def generar_plantilla_exploratoria(nombre_proyecto, fecha_ini, fecha_fin, var_dep, vars_ind):
     if not os.path.exists(_PLANTILLA_EXPLORATORIA):
-        messagebox.showerror(
-            "Plantilla no encontrada",
-            f"No se encontró la plantilla base en:\n{_PLANTILLA_EXPLORATORIA}"
-        )
+        messagebox.showerror("Error", f"No se encontró la plantilla en: {_PLANTILLA_EXPLORATORIA}")
         return False
 
-    # Diálogo para guardar
     nombre_archivo = f"exploracion_{_limpiar_nombre(nombre_proyecto)}.xlsx"
-    ruta_destino = filedialog.asksaveasfilename(
-        title="Guardar plantilla de exploración",
-        initialfile=nombre_archivo,
-        defaultextension=".xlsx",
-        filetypes=[("Excel", "*.xlsx")]
-    )
-    if not ruta_destino:
-        return False
+    ruta_destino = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=nombre_archivo, filetypes=[("Excel", "*.xlsx")])
+    if not ruta_destino: return False
 
-    # Copiar plantilla base
     shutil.copy2(_PLANTILLA_EXPLORATORIA, ruta_destino)
-
-    # Personalizar
     try:
         wb = load_workbook(ruta_destino)
         _escribir_hoja_instrucciones(wb, var_dep, vars_ind, fecha_ini, fecha_fin)
         _escribir_hoja_periodo(wb, fecha_ini, fecha_fin, var_dep, vars_ind)
         wb.save(ruta_destino)
-
-        messagebox.showinfo(
-            "Plantilla generada",
-            f"Plantilla guardada exitosamente en:\n{ruta_destino}\n\n"
-            "Llena la hoja 'Periodo_Análisis' con tus datos y luego cárgala en la app."
-        )
+        messagebox.showinfo("Éxito", f"Plantilla generada en:\n{ruta_destino}")
         return True
-    except PermissionError:
-        messagebox.showerror("Error de acceso", 
-                             f"No se pudo guardar la plantilla en:\n{ruta_destino}\n\n"
-                             "El archivo ya existe y está abierto. Ciérralo e intenta de nuevo.")
-        return False
     except Exception as e:
-        messagebox.showerror("Error", f"Error inesperado al generar la plantilla: {e}")
+        messagebox.showerror("Error", f"Error al generar: {e}")
         return False
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# B — GENERACIÓN DE PLANTILLA M1 (CONSUMO ABSOLUTO)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def generar_plantilla_m1(data: dict) -> bool:
-    """
-    Personaliza y guarda la plantilla para el Modelo M1.
-    data: {nombre, fuente, unidad, pb_ini, pb_fin, pr_ini, pr_fin}
-    """
     if not os.path.exists(_PLANTILLA_M1):
         messagebox.showerror("Error", f"No se encontró la plantilla M1 en:\n{_PLANTILLA_M1}")
         return False
 
     nombre_archivo = f"M1_{_limpiar_nombre(data['nombre'])}.xlsx"
-    ruta_destino = filedialog.asksaveasfilename(
-        title="Guardar plantilla M1",
-        initialfile=nombre_archivo,
-        defaultextension=".xlsx",
-        filetypes=[("Excel", "*.xlsx")]
-    )
+    ruta_destino = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=nombre_archivo, filetypes=[("Excel", "*.xlsx")])
     if not ruta_destino: return False
 
     try:
         shutil.copy2(_PLANTILLA_M1, ruta_destino)
         wb = load_workbook(ruta_destino)
-        
         _escribir_m1_identificacion(wb, data)
         _escribir_m1_periodo_base(wb, data)
         _escribir_m1_monitoreo(wb, data)
-        
         wb.save(ruta_destino)
         messagebox.showinfo("Éxito", f"Plantilla M1 generada en:\n{ruta_destino}")
         return True
-    except PermissionError:
-        messagebox.showerror("Error de acceso", 
-                             f"No se puede crear el archivo:\n{ruta_destino}\n\n"
-                             "¿El archivo ya existe y está abierto en Excel? Ciérralo e intenta de nuevo.")
-        return False
     except Exception as e:
-        messagebox.showerror("Error", f"Error al generar plantilla M1: {e}")
+        messagebox.showerror("Error", f"Error al generar: {e}")
         return False
 
+# ── Helpers Escritura Inicial ───────────────────────────────────────────────
+
 def _escribir_m1_identificacion(wb, data):
-    """Escribe nombre, fuente y unidad en la hoja Modelo_LBEn."""
     ws = wb["Modelo_LBEn"]
-    # Según usuario: D5, D6, D7
     ws["D5"] = data["nombre"]
     ws["D6"] = data["fuente"]
     ws["D7"] = data["unidad"]
 
 def _escribir_m1_periodo_base(wb, data):
     ws = wb["Período_Base"]
-    # B8 en adelante para fechas
     fechas = _generar_fechas_mensuales(data["pb_ini"], data["pb_fin"])
-    for i, f_str in enumerate(fechas):
-        ws[f"B{8+i}"] = f_str
+    for i, f_str in enumerate(fechas): ws[f"B{8+i}"] = f_str
 
 def _escribir_m1_monitoreo(wb, data):
     ws = wb["Monitoreo"]
-    # B8 en adelante para fechas
     fechas = _generar_fechas_mensuales(data["pr_ini"], data["pr_fin"])
-    for i, f_str in enumerate(fechas):
-        ws[f"B{8+i}"] = f_str
-
+    for i, f_str in enumerate(fechas): ws[f"B{8+i}"] = f_str
 
 def _escribir_hoja_instrucciones(wb, var_dep, vars_ind, fecha_ini, fecha_fin):
-    """Escribe metadatos en la hoja Instrucciones."""
     ws = wb["Instrucciones"]
-
-    # C11: variable dependiente
     ws["C11"] = var_dep
-
-    # C12: variables independientes
     ws["C12"] = ", ".join(vars_ind) if vars_ind else "—"
-
-    # C13: rango de fechas
     ws["C13"] = f"{fecha_ini} — {fecha_fin}"
 
-    # C3: recomendación (vacía hasta que se analice, placeholder)
-    ws["C3"] = "Pendiente de análisis"
-
-
 def _escribir_hoja_periodo(wb, fecha_ini, fecha_fin, var_dep, vars_ind):
-    """
-    Escribe encabezados y fechas en la hoja Periodo_Analisis.
-    - Fila 6: encabezados (Fecha en B, var_dep en C, vars_ind en D, E, F...)
-    - Fila 7: hints
-    - Desde B8: fechas mensuales en formato Mmm-AAAA
-    """
     ws = wb["Periodo_Análisis"]
-
-    # ── Encabezados fila 6 ────────────────────────────────────────────────────
     ws["B6"] = "Fecha"
     ws["C6"] = var_dep
-
     for i, var in enumerate(vars_ind):
-        col = get_column_letter(4 + i)   # D=4, E=5, F=6...
-        ws[f"{col}6"] = var
-        # Extender formato si hay más de 5 variables
-        _aplicar_estilo_encabezado(ws[f"{col}6"])
-
-    # ── Hints fila 7 ─────────────────────────────────────────────────────────
-    ws["B7"] = "(automático)"
-    ws["C7"] = "Consumo Facturado en kWh"
-    for i in range(len(vars_ind)):
         col = get_column_letter(4 + i)
-        ws[f"{col}7"] = "Numérico"
-
-    # ── Fechas desde B8 ───────────────────────────────────────────────────────
+        ws[f"{col}6"] = var
+        _aplicar_estilo_encabezado(ws[f"{col}6"])
     fechas = _generar_fechas_mensuales(fecha_ini, fecha_fin)
-    for fila_idx, fecha_str in enumerate(fechas):
-        fila_excel = 8 + fila_idx
-        ws[f"B{fila_excel}"] = fecha_str
-
-        # Formato numérico con separador de miles para columnas de datos
-        for i in range(len(vars_ind) + 1):   # +1 por var_dep
-            col = get_column_letter(3 + i)
-            celda = ws[f"{col}{fila_excel}"]
-            celda.number_format = "#,##0.00"
-
+    for i, f_str in enumerate(fechas): ws[f"B{8+i}"] = f_str
 
 def _aplicar_estilo_encabezado(celda):
-    """Aplica estilo verde oscuro a celdas de encabezado."""
-    celda.font = Font(bold=True, color="FFFFFF", name="Arial", size=11)
+    celda.font = Font(bold=True, color="FFFFFF", size=11)
     celda.fill = PatternFill("solid", start_color="204339")
     celda.alignment = Alignment(horizontal="center", vertical="center")
 
-
-def _generar_fechas_mensuales(fecha_ini: str, fecha_fin: str) -> list[str]:
-    """
-    Genera lista de fechas mensuales entre fecha_ini y fecha_fin.
-    Formato entrada: MM/AAAA  →  Formato salida: Ene-2022
-    """
-    meses_es = {
-        1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr",
-        5: "May", 6: "Jun", 7: "Jul", 8: "Ago",
-        9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"
-    }
-
+def _generar_fechas_mensuales(f_ini, f_fin):
+    meses_es = {1:"Ene", 2:"Feb", 3:"Mar", 4:"Abr", 5:"May", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dic"}
     try:
-        ini = datetime.strptime(fecha_ini, "%m/%Y")
-        fin = datetime.strptime(fecha_fin, "%m/%Y")
-    except ValueError:
-        return []
-
-    fechas = []
-    actual = ini
-    while actual <= fin:
-        fechas.append(f"{meses_es[actual.month]}-{actual.year}")
-        # Avanzar un mes
-        if actual.month == 12:
-            actual = actual.replace(year=actual.year + 1, month=1)
-        else:
-            actual = actual.replace(month=actual.month + 1)
-
-    return fechas
-
+        ini = datetime.strptime(f_ini, "%m/%Y")
+        fin = datetime.strptime(f_fin, "%m/%Y")
+        res = []
+        curr = ini
+        while curr <= fin:
+            res.append(f"{meses_es[curr.month]}-{curr.year}")
+            if curr.month == 12: curr = curr.replace(year=curr.year+1, month=1)
+            else: curr = curr.replace(month=curr.month+1)
+        return res
+    except: return []
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# B — LECTURA DEL EXCEL EXPLORATORIO
+# B — LECTURA DE DATOS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def leer_excel_exploratorio(path: str) -> tuple[pd.DataFrame, dict, list]:
-    """
-    Lee la hoja Periodo_Analisis del Excel exploratorio.
-
-    Retorna:
-        df       : DataFrame con los datos (fecha + consumo + variables)
-        meta     : dict con var_dep, vars_ind, fecha_ini, fecha_fin
-        errores  : lista de strings con errores encontrados
-    """
-    errores = []
-
-    if not os.path.exists(path):
-        return None, {}, [f"Archivo no encontrado: {path}"]
-
-    # Verificar hoja obligatoria
+def leer_excel_exploratorio(path):
+    if not os.path.exists(path): return None, {}, ["No encontrado"]
     wb = load_workbook(path, data_only=True)
-    if "Periodo_Análisis" not in wb.sheetnames:
-        return None, {}, ["El archivo no contiene la hoja 'Periodo_Análisis'."]
-
+    if "Periodo_Análisis" not in wb.sheetnames: return None, {}, ["Falta hoja"]
     ws = wb["Periodo_Análisis"]
-
-    # ── Leer encabezados desde fila 6 ────────────────────────────────────────
-    encabezados = []
-    col = 2   # columna B
+    
+    headers = []
+    c = 2
     while True:
-        val = ws.cell(row=6, column=col).value
-        if val is None:
-            break
-        encabezados.append(str(val).strip())
-        col += 1
-
-    if len(encabezados) < 2:
-        return None, {}, [
-            "No se encontraron suficientes columnas en la fila 6. "
-            "Se requiere al menos: Fecha y una columna de consumo."
-        ]
-
-    col_fecha = encabezados[0]       # "Fecha"
-    var_dep   = encabezados[1]       # consumo
-    vars_ind  = encabezados[2:]      # variables independientes
-
-    # ── Leer datos desde fila 8 ───────────────────────────────────────────────
+        v = ws.cell(row=6, column=c).value
+        if not v: break
+        headers.append(str(v).strip())
+        c += 1
+    
     datos = []
-    fila  = 8
+    r = 8
     while True:
-        fecha_val = ws.cell(row=fila, column=2).value
-        if fecha_val is None:
-            break
-
-        fila_datos = {"Fecha": str(fecha_val).strip()}
-        for i, col_nombre in enumerate(encabezados[1:]):
-            val = ws.cell(row=fila, column=3 + i).value
-            fila_datos[col_nombre] = val
-        datos.append(fila_datos)
-        fila += 1
-
-    if not datos:
-        return None, {}, ["No se encontraron datos desde la fila 8."]
-
+        fv = ws.cell(row=r, column=2).value
+        if not fv: break
+        row = {"Fecha": str(fv).strip()}
+        for i, h in enumerate(headers[1:]): row[h] = ws.cell(row=r, column=3+i).value
+        datos.append(row)
+        r += 1
+    
     df = pd.DataFrame(datos)
+    meta = {"var_dep": headers[1], "vars_ind": headers[2:], "fecha_ini": df["Fecha"].iloc[0], "fecha_fin": df["Fecha"].iloc[-1]}
+    return df, meta, []
 
-    # ── Validaciones básicas ──────────────────────────────────────────────────
-    for col_nombre in [var_dep] + vars_ind:
-        if col_nombre in df.columns:
-            df[col_nombre] = pd.to_numeric(df[col_nombre], errors="coerce")
-            nulos = df[col_nombre].isna().sum()
-            if nulos > 0:
-                errores.append(
-                    f"Columna '{col_nombre}': {nulos} valores no numéricos o vacíos."
-                )
-
-    if len(df) < 3:
-        errores.append(
-            f"Solo se encontraron {len(df)} registros. "
-            "El mínimo técnico es 3. Se recomiendan 12 o más."
-        )
-
-    # ── Metadatos ─────────────────────────────────────────────────────────────
-    meta = {
-        "var_dep":   var_dep,
-        "vars_ind":  vars_ind,
-        "n_datos":   len(df),
-        "fecha_ini": df["Fecha"].iloc[0]  if len(df) > 0 else "",
-        "fecha_fin": df["Fecha"].iloc[-1] if len(df) > 0 else "",
-    }
-
-    return df, meta, errores
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# C — LECTURA DEL EXCEL M1 (CONSUMO ABSOLUTO)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def leer_excel_m1(path: str) -> tuple[pd.DataFrame, pd.DataFrame, dict, list]:
-    """
-    Lee las hojas Periodo_Base y Monitoreo del Excel M1.
-    Retorna (df_base, df_monitoreo, meta, errores).
-    """
+def leer_excel_m1(path):
     errores = []
-    if not os.path.exists(path):
-        return None, None, {}, [f"Archivo no encontrado: {path}"]
-
     wb = load_workbook(path, data_only=True)
-    
-    # Validar hojas
     for s in ["Período_Base", "Monitoreo"]:
-        if s not in wb.sheetnames:
-            errores.append(f"Falta la hoja obligatoria: {s}")
-    
+        if s not in wb.sheetnames: errores.append(f"Falta hoja {s}")
     if errores: return None, None, {}, errores
 
-    # Leer Período_Base
-    df_base = _leer_hoja_datos_m1(wb["Período_Base"])
-    # Leer Monitoreo
-    df_monitoreo = _leer_hoja_datos_m1(wb["Monitoreo"])
-
-    # Metadatos desde Instrucciones
-    ws_inst = wb["Instrucciones"]
-    meta = {
-        "entidad": ws_inst["C12"].value,
-        "fuente": ws_inst["C13"].value,
-        "unidad": ws_inst["C14"].value,
-        "periodo_base_text": ws_inst["C15"].value
-    }
-
-    return df_base, df_monitoreo, meta, errores
+    df_b = _leer_hoja_datos_m1(wb["Período_Base"])
+    df_m = _leer_hoja_datos_m1(wb["Monitoreo"])
+    ws_mod = wb["Modelo_LBEn"] 
+    meta = {"entidad": ws_mod["D5"].value, "fuente": ws_mod["D6"].value, "unidad": ws_mod["D7"].value}
+    return df_b, df_m, meta, []
 
 def _leer_hoja_datos_m1(ws):
-    """Auxiliar para leer la estructura de B6:K en M1"""
-    # 1. Detectar encabezados en fila 6
     headers = []
-    for col in range(2, 13): # B a L
-        val = ws.cell(row=6, column=col).value
-        if val: headers.append(str(val).strip())
+    for c in range(2, 11): # B a J (Usuario llena hasta J)
+        v = ws.cell(row=6, column=c).value
+        if v: headers.append(str(v).strip())
         else: break
-    
-    # 2. Leer datos desde fila 8
     datos = []
     for r in range(8, ws.max_row + 1):
-        fecha = ws.cell(row=r, column=2).value # Col B
-        if not fecha: break
-        
-        row_dict = {"Fecha": str(fecha)}
-        for i, h in enumerate(headers[1:]): # Resto de columnas
-            row_dict[h] = ws.cell(row=r, column=3 + i).value
-        datos.append(row_dict)
-    
+        f = ws.cell(row=r, column=2).value
+        if not f: break
+        row = {"Fecha": str(f)}
+        for i, h in enumerate(headers[1:]): row[h] = ws.cell(row=r, column=3+i).value
+        datos.append(row)
     return pd.DataFrame(datos)
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# C — ESCRITURA DE RESULTADOS EXPLORATORIOS AL EXCEL
+# C — ESCRITURA DE RESULTADOS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def escribir_resultados_exploratorios(
-    path: str,
-    recomendacion: str,
-    justificacion: str,
-    tabla_resultados: list[dict],
-) -> bool:
-    """
-    Escribe los resultados del análisis en la hoja Modelo_LBEn.
-
-    tabla_resultados: lista de dicts con keys:
-        variable, r_pearson, p_valor, significativa, grado, interpretacion
-    """
-    if not os.path.exists(path):
-        messagebox.showerror("Error", f"No se encontró el archivo:\n{path}")
-        return False
-
+def escribir_resultados_exploratorios(path, recomendacion, justificacion, tabla_resultados):
     wb = load_workbook(path)
-
-    if "Modelo_LBEn" not in wb.sheetnames:
-        messagebox.showerror(
-            "Error",
-            "El archivo no contiene la hoja 'Modelo_LBEn'."
-        )
-        return False
-
-    ws_inst  = wb["Instrucciones"]
-    ws_model = wb["Modelo_LBEn"]
-
-    # ── Hoja Instrucciones: C3 ────────────────────────────────────────────────
+    ws_inst = wb["Instrucciones"]; ws_model = wb["Modelo_LBEn"]
     ws_inst["C3"] = recomendacion
-
-    # ── Hoja Modelo_LBEn: C5, C6, C7 (celdas ancla de rangos combinados) ────
-    ws_model["C5"] = recomendacion
-    ws_model["C6"] = "p-valor < 0.05 (α=0.05, bilateral) | Resolución UPME 016/2024"
-    ws_model["C7"] = justificacion
-
-    # ── Tabla desde B12 ───────────────────────────────────────────────────────
-    encabezados_tabla = [
-        "Variable Independiente", "Coeficiente r (Pearson)",
-        "p-valor (bilateral)", "¿Significativa? (α=0.05)",
-        "Grado de Influencia", "Interpretación"
-    ]
-
-    # Encabezado fila 12
-    for ci, txt in enumerate(encabezados_tabla):
-        celda = ws_model.cell(row=12, column=2 + ci, value=txt)
-        celda.font      = Font(bold=True, color="FFFFFF",
-                               name="Arial", size=10)
-        celda.fill      = PatternFill("solid", start_color="204339")
-        celda.alignment = Alignment(horizontal="center",
-                                    vertical="center", wrap_text=True)
-
-    # Filas de datos desde fila 13
+    ws_model["C5"] = recomendacion; ws_model["C6"] = "UPME 016/2024"; ws_model["C7"] = justificacion
     for ri, row in enumerate(tabla_resultados):
-        fila_excel = 13 + ri
-        valores = [
-            row.get("variable", ""),
-            row.get("r_pearson", ""),
-            row.get("p_valor", ""),
-            "Sí" if row.get("significativa") else "No",
-            row.get("grado", ""),
-            row.get("interpretacion", ""),
-        ]
-        bg = "F2F2F2" if ri % 2 == 0 else "FFFFFF"
-        for ci, val in enumerate(valores):
-            celda = ws_model.cell(row=fila_excel, column=2 + ci, value=val)
-            celda.fill      = PatternFill("solid", start_color=bg)
-            celda.alignment = Alignment(horizontal="center",
-                                        vertical="center", wrap_text=True)
-            celda.font      = Font(name="Arial", size=10)
+        f = 13 + ri
+        vals = [row.get("variable"), row.get("r_pearson"), row.get("p_valor"), "Sí" if row.get("significativa") else "No", row.get("grado"), row.get("interpretacion")]
+        for ci, v in enumerate(vals): ws_model.cell(row=f, column=2+ci, value=v)
+    wb.save(path)
+    return True
 
-            # Colorear columna significativa
-            if ci == 3:
-                celda.font = Font(
-                    name="Arial", size=10, bold=True,
-                    color="2D6A4F" if row.get("significativa") else "E63946"
-                )
-
-    try:
-        wb.save(path)
-        return True
-    except PermissionError:
-        messagebox.showerror("Archivo en uso",
-                             f"No se pudo actualizar el archivo:\n{path}\n\n"
-                             "Por favor, cierra el Excel y vuelve a intentarlo.")
-        return False
-    except Exception as e:
-        messagebox.showerror("Error al guardar", f"No se pudo guardar el archivo: {e}")
-        return False
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# D — UTILIDADES
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def _limpiar_nombre(nombre: str) -> str:
-    """Limpia el nombre del proyecto para usarlo como nombre de archivo."""
-    import re
-    nombre = nombre.strip().lower()
-    nombre = re.sub(r"[^\w\s-]", "", nombre)
-    nombre = re.sub(r"[\s]+", "_", nombre)
-    return nombre[:50]
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# D — ESCRITURA DE RESULTADOS M1 (CONSUMO ABSOLUTO)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def escribir_resultados_m1(path: str, df_lben: pd.DataFrame, df_mon: pd.DataFrame, meta: dict) -> bool:
-    """
-    Escribe resultados de cálculo en la hoja Modelo_LBEn y Monitoreo del Excel M1.
-    """
+def escribir_resultados_m1(path, df_lben, df_mon, df_base_final, meta_resumen, data_config):
+    """Escribe los resultados M1 en el Excel con formato numérico."""
     if not os.path.exists(path): return False
     wb = load_workbook(path)
-    
-    # 1. Hoja Modelo_LBEn: Identificación y Métricas
-    ws_mod = wb["Modelo_LBEn"]
-    ws_mod["D5"] = meta.get("entidad", "—")
-    ws_mod["D6"] = meta.get("fuente", "—")
-    ws_mod["D7"] = meta.get("unidad", "—")
-    
-    # Métricas (Basado en inspección previa)
-    ws_mod["K5"] = meta.get("periodo_base_text", "—").split("-")[0].strip() # Inicio
-    ws_mod["K6"] = meta.get("periodo_base_text", "—").split("-")[-1].strip() # Fin
-    ws_mod["K7"] = df_lben['lben'].sum() # Consumo promedio anual
-    
-    # 2. Hoja Modelo_LBEn: Tabla LBEn Mensual (Desde B16)
-    for i, row in df_lben.iterrows():
-        fila = 16 + i
-        ws_mod[f"C{fila}"] = row['lben']
-        ws_mod[f"D{fila}"] = row['n_usados']
-        ws_mod[f"E{fila}"] = row['lim_inf']
-        ws_mod[f"F{fila}"] = row['lim_sup']
+    fmt_num = "#,##0.00"
 
-    # 3. Hoja Monitoreo: Columnas Azules (Desde Col L en adelante)
+    # 1. Hoja Período_Base: Llenar K y L con formato
+    if df_base_final is not None:
+        ws_base = wb["Período_Base"]
+        for i, row in df_base_final.iterrows():
+            f = 8 + i
+            # Escribir y aplicar formato miles/2-dec
+            for col_let in ["K", "L"]:
+                celda = ws_base[f"{col_let}{f}"]
+                val = row.get("Normalizado") if col_let == "K" else row.get("Ajustado")
+                celda.value = val
+                celda.number_format = fmt_num
+
+    # 2. Hoja Modelo_LBEn: Ficha Técnica (K5:M10)
+    ws_mod = wb["Modelo_LBEn"]
+    
+    # Identificación Proyecto
+    ws_mod["D5"] = data_config.get("nombre"); ws_mod["D6"] = data_config.get("fuente"); ws_mod["D7"] = data_config.get("unidad")
+    
+    # Columna K: Métricas de Datos
+    ws_mod["K5"] = "M1 (Consumo Absoluto)"
+    ws_mod["K6"] = meta_resumen.get("n_inicial")
+    ws_mod["K7"] = meta_resumen.get("n_filt_est")
+    ws_mod["K8"] = meta_resumen.get("n_filt_man")
+    ws_mod["K9"] = meta_resumen.get("n_final")
+    ws_mod["K10"].value = meta_resumen.get("fiabilidad")
+    ws_mod["K10"].number_format = "0.0%"
+
+    # Columna M: Periodo y Energía
+    ws_mod["M5"] = data_config.get("pb_ini")
+    ws_mod["M6"] = data_config.get("pb_fin")
+    
+    c_prom = meta_resumen.get("consumo_promedio_anual", 0)
+    ws_mod["M7"].value = c_prom; ws_mod["M7"].number_format = fmt_num
+    
+    a_kwh = meta_resumen.get("potencial_ahorro_kwh", 0)
+    ws_mod["M8"].value = a_kwh; ws_mod["M8"].number_format = fmt_num
+    
+    a_pct = meta_resumen.get("potencial_ahorro_pct", 0)
+    ws_mod["M9"].value = a_pct; ws_mod["M9"].number_format = "0.0%"
+    
+    m15 = meta_resumen.get("meta_15", 0)
+    ws_mod["M10"].value = m15; ws_mod["M10"].number_format = fmt_num
+
+    # Tablas Modelo (B16:F27 y J16:L28)
+    for i, row in df_lben.iterrows():
+        f = 16 + i
+        # Tabla LBEn (C16:F27)
+        # Cambiado: E -> min_hist, F -> max_hist
+        for col_l, field in zip(["C", "D", "E", "F"], ["lben", "n_usados", "min_hist", "max_hist"]):
+            c = ws_mod[f"{col_l}{f}"]
+            c.value = row[field]
+            if field != "n_usados": c.number_format = fmt_num
+            
+        # Tabla Ahorro (J16:M28)
+        ahorro_val = row['lben'] - row['min_hist']
+        ws_mod[f"J{f}"].value = row['lben']; ws_mod[f"J{f}"].number_format = fmt_num
+        ws_mod[f"K{f}"].value = row['min_hist']; ws_mod[f"K{f}"].number_format = fmt_num
+        ws_mod[f"L{f}"].value = ahorro_val; ws_mod[f"L{f}"].number_format = fmt_num
+        if row['lben'] > 0:
+            ws_mod[f"M{f}"].value = ahorro_val / row['lben']
+            ws_mod[f"M{f}"].number_format = "0.0%"
+    
+    # Totales
+    total_min = df_lben['min_hist'].sum()
+    ws_mod["J28"].value = c_prom; ws_mod["J28"].number_format = fmt_num
+    ws_mod["K28"].value = total_min; ws_mod["K28"].number_format = fmt_num
+    ahorro_anual = (df_lben['lben'] - df_lben['min_hist']).sum()
+    ws_mod["L28"].value = ahorro_anual; ws_mod["L28"].number_format = fmt_num
+    if c_prom > 0: 
+        ws_mod["M28"].value = ahorro_anual / c_prom
+        ws_mod["M28"].number_format = "0.0%"
+
+    # 3. Monitoreo Triple Meta (L:U)
     if df_mon is not None and not df_mon.empty:
         ws_mon = wb["Monitoreo"]
         for i, row in df_mon.iterrows():
-            fila = 8 + i
-            # L: Normalizado, M: Normalizado y Ajustado (M1 asume iguales salvo ajuste NR)
-            ws_mon[f"L{fila}"] = row.get("Normalizado", 0)
-            ws_mon[f"M{fila}"] = row.get("Normalizado", 0) # Simplificado M1
-            ws_mon[f"N{fila}"] = row.get("LBEn_Mes", 0)
-            ws_mon[f"O{fila}"] = row.get("Ahorro_kWh", 0)
-            ws_mon[f"P{fila}"] = row.get("Ahorro_Pct", 0) / 100 # Para formato %
+            f = 8 + i
+            cols_map = {
+                "L": "Normalizado", "M": "Ajustado", "N": "LBEn_Mes", 
+                "O": "Desemp_kWh", "P": "Desemp_Pct", "Q": "CUSUM_kWh",
+                "R": "Desemp_COP", "S": "CUSUM_COP", "T": "Desemp_CO2", "U": "CUSUM_CO2"
+            }
+            for let, field in cols_map.items():
+                c = ws_mon[f"{let}{f}"]
+                val = row.get(field, 0)
+                if field == "Desemp_Pct": 
+                    c.value = val/100
+                    c.number_format = "0.0%"
+                else:
+                    c.value = val
+                    c.number_format = fmt_num
 
     try:
         wb.save(path)
         return True
-    except PermissionError:
-        messagebox.showerror("Archivo en uso",
-                             f"No se pueden guardar los resultados en:\n{path}\n\n"
-                             "El archivo está abierto en Excel. Ciérralo y vuelve a intentarlo.")
-        return False
-    except Exception as e:
-        messagebox.showerror("Error grave", f"Ocurrió un error al guardar los resultados M1: {e}")
-        return False
+    except: return False
+
+def _limpiar_nombre(n):
+    import re
+    return re.sub(r"[^\w\s-]", "", n.strip().lower()).replace(" ", "_")[:50]

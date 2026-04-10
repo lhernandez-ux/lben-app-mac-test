@@ -587,15 +587,24 @@ def recomendar_modelo(resultados: list[dict]) -> dict:
     s = len(vars_sig)
 
     if s == 0:
+        if not resultados:
+            justificacion = (
+                "Se analizó únicamente el consumo histórico. "
+                "El modelo M1 construirá la línea base como el "
+                "promedio histórico del consumo mensual."
+            )
+        else:
+            justificacion = (
+                "No se detectaron variables estadísticamente significativas "
+                "(p < 0.05). El modelo M1 construirá la línea base como el "
+                "promedio histórico del consumo mensual."
+            )
+
         return {
             "modelo":      "M1",
             "codigo":      "M1",
-            "titulo":      "Modelo de Promedio (M1)",
-            "justificacion": (
-                "No se detectaron variables estadísticamente significativas "
-                f"(p < 0.05). El modelo M1 construirá la línea base como el "
-                "promedio histórico del consumo mensual."
-            ),
+            "titulo":      "Modelo de Consumo Absoluto (M1)",
+            "justificacion": justificacion,
             "vars_significativas": []
         }
     elif s == 1:
@@ -625,6 +634,194 @@ def recomendar_modelo(resultados: list[dict]) -> dict:
             ),
             "vars_significativas": [v["variable"] for v in vars_sig]
         }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ANÁLISIS AVANZADO (OUTLIERS, COLINEALIDAD, PATRONES)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def obtener_diagnostico_avanzado(df: pd.DataFrame, var_dep: str, vars_ind: list[str]) -> dict:
+    """
+    Ejecuta un diagnóstico completo de la calidad de los datos.
+    """
+    return {
+        "outliers":      detectar_outliers(df, var_dep),
+        "colinealidad":  detectar_colinealidad(df, vars_ind),
+        "estacionalidad": analizar_estacionalidad(df, var_dep)
+    }
+
+def detectar_outliers(df: pd.DataFrame, col: str) -> dict:
+    """
+    Detecta valores atípicos usando el método IQR (Rango Intercuartílico).
+    """
+    if col not in df.columns: return {"conteo": 0, "mensajes": []}
+    
+    y = pd.to_numeric(df[col], errors="coerce").dropna()
+    if len(y) < 5: return {"conteo": 0, "mensajes": []}
+
+    q1 = y.quantile(0.25)
+    q3 = y.quantile(0.75)
+    iqr = q3 - q1
+    limite_inf = q1 - 1.5 * iqr
+    limite_sup = q3 + 1.5 * iqr
+
+    outliers_mask = (y < limite_inf) | (y > limite_sup)
+    indices = y[outliers_mask].index.tolist()
+    
+    mensajes = []
+    if len(indices) > 0:
+        for idx in indices:
+            fecha_str = df.loc[idx, "Fecha"] if "Fecha" in df.columns else f"registro {idx+1}"
+            valor = y[idx]
+            tipo = "inusualmente alto" if valor > limite_sup else "inusualmente bajo"
+            mensajes.append(f"El {fecha_str} se detectó un consumo {tipo} ({valor:,.0f}).")
+            
+    return {
+        "conteo": len(indices),
+        "indices": indices,
+        "mensajes": mensajes,
+        "limites": (limite_inf, limite_sup)
+    }
+
+def detectar_colinealidad(df: pd.DataFrame, vars_ind: list[str], threshold: float = 0.85) -> list:
+    """
+    Detecta si dos variables independientes son muy parecidas (redundantes).
+    """
+    alertas = []
+    v_validas = [v for v in vars_ind if v in df.columns]
+    
+    if len(v_validas) < 2: return alertas
+
+    # Matriz de correlación solo para variables independientes
+    corr_matrix = df[v_validas].apply(pd.to_numeric, errors="coerce").corr().abs()
+
+    parejas_vistas = set()
+    for i in range(len(v_validas)):
+        for j in range(i + 1, len(v_validas)):
+            v1, v2 = v_validas[i], v_validas[j]
+            r = corr_matrix.loc[v1, v2]
+            if r > threshold:
+                alertas.append({
+                    "variables": (v1, v2),
+                    "r": round(r, 2),
+                    "mensaje": f"'{v1}' y '{v2}' son muy similares (r={r:.2f}). Usar ambas podría confundir al modelo."
+                })
+    return alertas
+
+def analizar_tendencia(df: pd.DataFrame, col: str) -> dict:
+    """
+    Calcula la tendencia lineal del consumo (creciente, decreciente o estacionaria).
+    """
+    if col not in df.columns: return {"clase": "N/D", "pendiente": 0}
+    
+    y = pd.to_numeric(df[col], errors="coerce").dropna().values
+    if len(y) < 3: return {"clase": "Insuficiente", "pendiente": 0}
+
+    # Normalizar y para que la pendiente sea comparable
+    y_norm = (y - y.min()) / (y.max() - y.min()) if (y.max() - y.min()) != 0 else y
+    x = np.arange(len(y_norm))
+    
+    slope, *_ = stats.linregress(x, y_norm)
+    
+    if slope > 0.015:
+        clase = "Creciente"
+        desc = "Tendencia Creciente a largo plazo."
+    elif slope < -0.015:
+        clase = "Decreciente"
+        desc = "Tendencia Decreciente a largo plazo."
+    else:
+        clase = "Estacionaria"
+        desc = "Comportamiento Estacionario a largo plazo."
+        
+    return {"clase": clase, "descripcion": desc, "pendiente": round(slope, 4)}
+
+def analizar_estacionalidad(df: pd.DataFrame, col: str) -> dict:
+    """
+    Identifica el tipo de ciclo (Unimodal, Bimodal, Estable) y meses críticos.
+    Basado en el promedio mensual y umbrales de picos.
+    """
+    if col not in df.columns: return {"pico": "N/D", "valle": "N/D", "tipo": "N/D", "mensaje": "Sin datos"}
+    
+    df_copy = df.copy()
+    df_copy[col] = pd.to_numeric(df_copy[col], errors="coerce")
+    
+    try:
+        if "Fecha" in df_copy.columns:
+            # Silenciar el warning de inferencia de formato
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                fechas_dt = pd.to_datetime(df_copy["Fecha"], errors='coerce', dayfirst=True)
+            
+            df_copy["Mes_Num"] = fechas_dt.dt.month
+            
+            df_val = df_copy[df_copy["Mes_Num"].notna()].copy()
+            if df_val.empty: return {"pico": "N/D", "valle": "N/D", "tipo": "N/D", "mensaje": "Fecha inválida"}
+
+            promedios = df_val.groupby("Mes_Num")[col].mean()
+            global_avg = df_val[col].mean()
+            
+            # Identificar Picos (> 1.15 x promedio)
+            picos_indices = promedios[promedios > (global_avg * 1.15)].index.tolist()
+            meses_nombres = ["?", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+                             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+            
+            n_picos = len(picos_indices)
+            if n_picos == 1:
+                tipo = "Ciclo Unimodal"
+                detalle = f"Un solo periodo de alta demanda detectado en {meses_nombres[picos_indices[0]]}."
+            elif n_picos == 2:
+                tipo = "Ciclo Bimodal"
+                detalle = f"Dos temporadas de alta demanda en {meses_nombres[picos_indices[0]]} y {meses_nombres[picos_indices[1]]}."
+            elif n_picos > 2:
+                tipo = "Alta Volatilidad"
+                detalle = "Consumo irregular con múltiples fluctuaciones significativas."
+            else:
+                tipo = "Estable / Plano"
+                detalle = "Carga constante: Ningún mes se aleja más del 15% del promedio anual."
+
+            mes_pico = int(promedios.idxmax())
+            mes_valle = int(promedios.idxmin())
+            
+            return {
+                "pico": meses_nombres[mes_pico],
+                "valle": meses_nombres[mes_valle],
+                "tipo": tipo,
+                "mensaje": detalle,
+                "tendencia": analizar_tendencia(df, col)
+            }
+    except Exception as e:
+        print(f"Error estacionalidad: {e}")
+    
+    return {"pico": "N/D", "valle": "N/D", "tipo": "N/D", "mensaje": "Error en cálculo de ciclos"}
+
+def calcular_puntajes_sincronia(resultados_pearson: list[dict]) -> dict:
+    """
+    Convierte r de Pearson en un diagnóstico de sincronía (Directa/Inversa).
+    """
+    diagnosticos = {}
+    for r in resultados_pearson:
+        val = r["r_pearson"]
+        if val is not None:
+            # Magnitud
+            mag = abs(val) * 100
+            if mag < 40:
+                nivel = "Baja / Independiente"
+                tipo = "Independiente"
+            elif mag < 75:
+                nivel = "Moderada"
+                tipo = "Directa" if val > 0 else "Inversa"
+            else:
+                nivel = "Alta"
+                tipo = "Directa" if val > 0 else "Inversa"
+            
+            diagnosticos[r["variable"]] = {
+                "porcentaje": round(mag, 1),
+                "nivel": nivel,
+                "tipo": tipo,
+                "mensaje": f"{nivel} ({tipo})" if tipo != "Independiente" else nivel
+            }
+    return diagnosticos
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -769,6 +966,10 @@ _PLANTILLA_M1 = os.path.join(
     _DIR_DATA, "Plantilla_LBEn_M1_modelo.xlsx"
 )
 
+_PLANTILLA_EXPLORATORIA = os.path.join(
+    _DIR_DATA, "plantilla_exploracion_modelo.xlsx"
+)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # A — GENERACIÓN DE PLANTILLA EXPLORATORIA
@@ -809,17 +1010,26 @@ def generar_plantilla_exploratoria(
     shutil.copy2(_PLANTILLA_EXPLORATORIA, ruta_destino)
 
     # Personalizar
-    wb = load_workbook(ruta_destino)
-    _escribir_hoja_instrucciones(wb, var_dep, vars_ind, fecha_ini, fecha_fin)
-    _escribir_hoja_periodo(wb, fecha_ini, fecha_fin, var_dep, vars_ind)
-    wb.save(ruta_destino)
+    try:
+        wb = load_workbook(ruta_destino)
+        _escribir_hoja_instrucciones(wb, var_dep, vars_ind, fecha_ini, fecha_fin)
+        _escribir_hoja_periodo(wb, fecha_ini, fecha_fin, var_dep, vars_ind)
+        wb.save(ruta_destino)
 
-    messagebox.showinfo(
-        "Plantilla generada",
-        f"Plantilla guardada exitosamente en:\n{ruta_destino}\n\n"
-        "Llena la hoja 'Periodo_Análisis' con tus datos y luego cárgala en la app."
-    )
-    return True
+        messagebox.showinfo(
+            "Plantilla generada",
+            f"Plantilla guardada exitosamente en:\n{ruta_destino}\n\n"
+            "Llena la hoja 'Periodo_Análisis' con tus datos y luego cárgala en la app."
+        )
+        return True
+    except PermissionError:
+        messagebox.showerror("Error de acceso", 
+                             f"No se pudo guardar la plantilla en:\n{ruta_destino}\n\n"
+                             "El archivo ya existe y está abierto. Ciérralo e intenta de nuevo.")
+        return False
+    except Exception as e:
+        messagebox.showerror("Error", f"Error inesperado al generar la plantilla: {e}")
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -844,16 +1054,25 @@ def generar_plantilla_m1(data: dict) -> bool:
     )
     if not ruta_destino: return False
 
-    shutil.copy2(_PLANTILLA_M1, ruta_destino)
-    wb = load_workbook(ruta_destino)
-    
-    _escribir_m1_identificacion(wb, data)
-    _escribir_m1_periodo_base(wb, data)
-    _escribir_m1_monitoreo(wb, data)
-    
-    wb.save(ruta_destino)
-    messagebox.showinfo("Éxito", f"Plantilla M1 generada en:\n{ruta_destino}")
-    return True
+    try:
+        shutil.copy2(_PLANTILLA_M1, ruta_destino)
+        wb = load_workbook(ruta_destino)
+        
+        _escribir_m1_identificacion(wb, data)
+        _escribir_m1_periodo_base(wb, data)
+        _escribir_m1_monitoreo(wb, data)
+        
+        wb.save(ruta_destino)
+        messagebox.showinfo("Éxito", f"Plantilla M1 generada en:\n{ruta_destino}")
+        return True
+    except PermissionError:
+        messagebox.showerror("Error de acceso", 
+                             f"No se puede crear el archivo:\n{ruta_destino}\n\n"
+                             "¿El archivo ya existe y está abierto en Excel? Ciérralo e intenta de nuevo.")
+        return False
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al generar plantilla M1: {e}")
+        return False
 
 def _escribir_m1_identificacion(wb, data):
     """Escribe nombre, fuente y unidad en la hoja Modelo_LBEn."""
@@ -1207,8 +1426,17 @@ def escribir_resultados_exploratorios(
                     color="2D6A4F" if row.get("significativa") else "E63946"
                 )
 
-    wb.save(path)
-    return True
+    try:
+        wb.save(path)
+        return True
+    except PermissionError:
+        messagebox.showerror("Archivo en uso",
+                             f"No se pudo actualizar el archivo:\n{path}\n\n"
+                             "Por favor, cierra el Excel y vuelve a intentarlo.")
+        return False
+    except Exception as e:
+        messagebox.showerror("Error al guardar", f"No se pudo guardar el archivo: {e}")
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1266,8 +1494,17 @@ def escribir_resultados_m1(path: str, df_lben: pd.DataFrame, df_mon: pd.DataFram
             ws_mon[f"O{fila}"] = row.get("Ahorro_kWh", 0)
             ws_mon[f"P{fila}"] = row.get("Ahorro_Pct", 0) / 100 # Para formato %
 
-    wb.save(path)
-    return True
+    try:
+        wb.save(path)
+        return True
+    except PermissionError:
+        messagebox.showerror("Archivo en uso",
+                             f"No se pueden guardar los resultados en:\n{path}\n\n"
+                             "El archivo está abierto en Excel. Ciérralo y vuelve a intentarlo.")
+        return False
+    except Exception as e:
+        messagebox.showerror("Error grave", f"Ocurrió un error al guardar los resultados M1: {e}")
+        return False
 ```
 
 ## Core / Models
@@ -1587,6 +1824,121 @@ def aplicar_tema():
 ### __init__.py
 
 ```python
+from .selector_fecha import SelectorFecha
+
+```
+
+### selector_fecha.py
+
+```python
+"""
+ui/components/selector_fecha.py
+==============================
+Componente de selección de Mes/Año.
+"""
+
+import customtkinter as ctk
+from datetime import datetime
+from ui.theme import COLORS, FONTS
+
+class SelectorFecha(ctk.CTkFrame):
+    """
+    Componente para seleccionar Mes y Año mediante menús desplegables.
+    Retorna la fecha en formato MM/AAAA.
+    """
+    def __init__(self, master, label_text="Fecha", start_year=2015, end_year=2040, command=None, **kwargs):
+        super().__init__(master, fg_color="transparent", **kwargs)
+        
+        self.command = command
+        self.meses_nombres = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        ]
+        self.meses_map = {name: str(i+1).zfill(2) for i, name in enumerate(self.meses_nombres)}
+        self.anios = [str(y) for y in range(start_year, end_year + 1)]
+
+        # Layout
+        self.grid_columnconfigure(0, weight=1)
+        
+        # Etiqueta opcional
+        if label_text:
+            self.label = ctk.CTkLabel(
+                self, text=label_text,
+                font=(FONTS.family, FONTS.size_xs),
+                text_color=COLORS.text_secondary,
+                anchor="w"
+            )
+            self.label.pack(side="top", anchor="w", pady=(0, 4))
+
+        # Contenedor de menus
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.pack(fill="x")
+
+        # Menu Mes
+        self.combo_mes = ctk.CTkOptionMenu(
+            self.container,
+            values=self.meses_nombres,
+            command=self._on_change,
+            font=(FONTS.family, FONTS.size_sm),
+            fg_color=COLORS.bg_card,
+            button_color=COLORS.primary,
+            button_hover_color=COLORS.primary_dark,
+            text_color=COLORS.text_primary,
+            dropdown_fg_color=COLORS.bg_card,
+            dropdown_text_color=COLORS.text_primary,
+            dropdown_hover_color=COLORS.bg_main,
+            height=38,
+            width=120
+        )
+        self.combo_mes.pack(side="left", padx=(0, 8))
+        self.combo_mes.set("Enero")
+
+        # Menu Año
+        self.combo_anio = ctk.CTkOptionMenu(
+            self.container,
+            values=self.anios,
+            command=self._on_change,
+            font=(FONTS.family, FONTS.size_sm),
+            fg_color=COLORS.bg_card,
+            button_color=COLORS.primary,
+            button_hover_color=COLORS.primary_dark,
+            text_color=COLORS.text_primary,
+            dropdown_fg_color=COLORS.bg_card,
+            dropdown_text_color=COLORS.text_primary,
+            dropdown_hover_color=COLORS.bg_main,
+            height=38,
+            width=100
+        )
+        self.combo_anio.pack(side="left")
+        
+        # Año actual por defecto o el último disponible
+        current_year = str(datetime.now().year)
+        if current_year in self.anios:
+            self.combo_anio.set(current_year)
+        else:
+            self.combo_anio.set(self.anios[-1])
+
+    def _on_change(self, _=None):
+        if self.command:
+            self.command()
+
+    def get_value(self) -> str:
+        """Retorna formato MM/AAAA"""
+        mes = self.meses_map[self.combo_mes.get()]
+        anio = self.combo_anio.get()
+        return f"{mes}/{anio}"
+
+    def set_value(self, mm_aaaa: str):
+        """Establece el valor desde un string MM/AAAA"""
+        try:
+            mm, aaaa = mm_aaaa.split("/")
+            idx = int(mm) - 1
+            if 0 <= idx < 12:
+                self.combo_mes.set(self.meses_nombres[idx])
+            if aaaa in self.anios:
+                self.combo_anio.set(aaaa)
+        except:
+            pass
 
 ```
 
@@ -1875,6 +2227,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from datetime import datetime
 from ui.theme import COLORS, FONTS, DIMS
+from ui.components import SelectorFecha
 
 
 class ExploratorioConfigPage(ctk.CTkFrame):
@@ -1974,39 +2327,32 @@ class ExploratorioConfigPage(ctk.CTkFrame):
         fechas_frame.grid_columnconfigure((0, 1), weight=1)
 
         # Fecha inicio
-        fi_frame = ctk.CTkFrame(fechas_frame, fg_color="transparent")
-        fi_frame.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-        fi_frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            fi_frame, text="Fecha inicio (MM/AAAA)",
-            font=(FONTS.family, FONTS.size_xs),
-            text_color=COLORS.text_secondary, anchor="w"
-        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
-
-        self.entry_fecha_ini = self._entry(
-            fi_frame, placeholder="Ej: 01/2022"
+        self.sel_fecha_ini = SelectorFecha(
+            fechas_frame, label_text="Fecha inicio", 
+            command=self._actualizar_resumen_fechas
         )
-        self.entry_fecha_ini.grid(row=1, column=0, sticky="ew")
+        self.sel_fecha_ini.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
         # Fecha fin
-        ff_frame = ctk.CTkFrame(fechas_frame, fg_color="transparent")
-        ff_frame.grid(row=0, column=1, sticky="ew", padx=(8, 0))
-        ff_frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            ff_frame, text="Fecha fin (MM/AAAA)",
-            font=(FONTS.family, FONTS.size_xs),
-            text_color=COLORS.text_secondary, anchor="w"
-        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
-
-        self.entry_fecha_fin = self._entry(
-            ff_frame, placeholder="Ej: 12/2024"
+        self.sel_fecha_fin = SelectorFecha(
+            fechas_frame, label_text="Fecha fin",
+            command=self._actualizar_resumen_fechas
         )
-        self.entry_fecha_fin.grid(row=1, column=0, sticky="ew")
+        self.sel_fecha_fin.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+
+        # Etiqueta de resumen (debajo de las fechas)
+        self.lbl_resumen_fechas = ctk.CTkLabel(
+            card, text="",
+            font=(FONTS.family, FONTS.size_xs, "italic"),
+            text_color=COLORS.success, anchor="w"
+        )
+        self.lbl_resumen_fechas.grid(row=5, column=0, sticky="w", padx=DIMS.padding_card, pady=(0, 16))
+        
+        # Inicializar resumen
+        self._actualizar_resumen_fechas()
 
         # ── Variable dependiente ──────────────────────────────────────────────
-        self._seccion_label(card, "Variable dependiente (consumo)", row=5)
+        self._seccion_label(card, "Variable dependiente (consumo)", row=6)
 
         ctk.CTkLabel(
             card,
@@ -2018,10 +2364,10 @@ class ExploratorioConfigPage(ctk.CTkFrame):
         self.entry_var_dep = self._entry(
             card, placeholder="Ej: Consumo_kWh"
         )
-        self.entry_var_dep.grid(row=7, column=0, sticky="ew", **pad)
+        self.entry_var_dep.grid(row=8, column=0, sticky="ew", **pad)
 
         # ── Variables independientes ──────────────────────────────────────────
-        self._seccion_label(card, "Variables independientes", row=8)
+        self._seccion_label(card, "Variables independientes", row=9)
 
         ctk.CTkLabel(
             card,
@@ -2030,22 +2376,22 @@ class ExploratorioConfigPage(ctk.CTkFrame):
             font=(FONTS.family, FONTS.size_xs),
             text_color=COLORS.text_secondary, anchor="w",
             wraplength=700, justify="left"
-        ).grid(row=9, column=0, sticky="w",
-               padx=DIMS.padding_card, pady=(0, 8))
+        ).grid(row=10, column=0, sticky="w",
+               padx=DIMS.padding_card, pady=(0, 4))
 
         # Frame dinámico para variables
         self.vars_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self.vars_frame.grid(row=10, column=0, sticky="ew",
-                             padx=DIMS.padding_card, pady=(0, 8))
+        self.vars_frame.grid(row=11, column=0, sticky="ew",
+                             padx=DIMS.padding_card, pady=0)
         self.vars_frame.grid_columnconfigure(0, weight=1)
 
-        # Primera variable por defecto
+        # Cargar la primera por defecto (Truco estético)
         self._agregar_variable()
 
         # Botón agregar variable
         ctk.CTkButton(
             card,
-            text="+ Agregar variable candidata",
+            text="+ Agregar variable independiente",
             font=(FONTS.family, FONTS.size_sm),
             fg_color="transparent",
             text_color=COLORS.primary,
@@ -2055,8 +2401,8 @@ class ExploratorioConfigPage(ctk.CTkFrame):
             corner_radius=DIMS.button_radius,
             height=32,
             command=self._agregar_variable
-        ).grid(row=11, column=0, sticky="w",
-               padx=DIMS.padding_card, pady=(0, 20))
+        ).grid(row=12, column=0, sticky="w",
+               padx=DIMS.padding_card, pady=(8, 20))
 
         # ── Botones de acción ─────────────────────────────────────────────────
         self._build_botones(scroll)
@@ -2118,19 +2464,18 @@ class ExploratorioConfigPage(ctk.CTkFrame):
         )
         entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
-        # Botón eliminar (solo si no es la primera)
-        if idx > 1:
-            ctk.CTkButton(
-                fila,
-                text="✕",
-                font=(FONTS.family, FONTS.size_sm),
-                fg_color=COLORS.danger,
-                text_color="white",
-                hover_color="#C0392B",
-                width=36, height=38,
-                corner_radius=8,
-                command=lambda f=fila, e=entry: self._eliminar_variable(f, e)
-            ).grid(row=0, column=1)
+        # Botón eliminar
+        ctk.CTkButton(
+            fila,
+            text="✕",
+            font=(FONTS.family, FONTS.size_sm),
+            fg_color=COLORS.danger,
+            text_color="white",
+            hover_color="#C0392B",
+            width=36, height=38,
+            corner_radius=8,
+            command=lambda f=fila, e=entry: self._eliminar_variable(f, e)
+        ).grid(row=0, column=1)
 
         self.vars_independientes.append(entry)
 
@@ -2141,8 +2486,8 @@ class ExploratorioConfigPage(ctk.CTkFrame):
     # ── Lógica de confirmación ────────────────────────────────────────────────
     def _confirmar_y_descargar(self):
         nombre    = self.entry_nombre.get().strip()
-        fecha_ini = self.entry_fecha_ini.get().strip()
-        fecha_fin = self.entry_fecha_fin.get().strip()
+        fecha_ini = self.sel_fecha_ini.get_value()
+        fecha_fin = self.sel_fecha_fin.get_value()
         var_dep   = self.entry_var_dep.get().strip()
         vars_ind  = [e.get().strip() for e in self.vars_independientes
                      if e.get().strip()]
@@ -2152,23 +2497,13 @@ class ExploratorioConfigPage(ctk.CTkFrame):
             messagebox.showwarning("Campo requerido",
                                    "Ingresa el nombre del proyecto.")
             return
-        if not fecha_ini or not fecha_fin:
-            messagebox.showwarning("Campo requerido",
-                                   "Ingresa las fechas de inicio y fin.")
-            return
-        if not self._validar_fecha(fecha_ini) or \
-           not self._validar_fecha(fecha_fin):
-            messagebox.showerror("Formato incorrecto",
-                                 "Las fechas deben tener formato MM/AAAA.\n"
-                                 "Ejemplo: 01/2022")
+        if not self._validar_orden_fechas(fecha_ini, fecha_fin):
+            messagebox.showerror("Rango inválido",
+                                 "La fecha de fin debe ser posterior a la de inicio.")
             return
         if not var_dep:
             messagebox.showwarning("Campo requerido",
                                    "Ingresa el nombre de la variable dependiente.")
-            return
-        if not vars_ind:
-            messagebox.showwarning("Campo requerido",
-                                   "Agrega al menos una variable independiente.")
             return
 
         # Guardar en sesión
@@ -2188,11 +2523,42 @@ class ExploratorioConfigPage(ctk.CTkFrame):
             vars_ind        = vars_ind
         )
 
-    def _validar_fecha(self, fecha_str: str) -> bool:
+    def _actualizar_resumen_fechas(self):
+        """Calcula meses entre fechas y actualiza el label de resumen."""
+        f1 = self.sel_fecha_ini.get_value()
+        f2 = self.sel_fecha_fin.get_value()
+        
         try:
-            datetime.strptime(fecha_str, "%m/%Y")
-            return True
-        except ValueError:
+            d1 = datetime.strptime(f1, "%m/%Y")
+            d2 = datetime.strptime(f2, "%m/%Y")
+            
+            # Cálculo de meses
+            meses = (d2.year - d1.year) * 12 + (d2.month - d1.month) + 1
+            
+            # Formateo nombres cortos para el label
+            meses_abr = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+            f1_txt = f"{meses_abr[d1.month-1]}-{d1.year}"
+            f2_txt = f"{meses_abr[d2.month-1]}-{d2.year}"
+            
+            if meses > 0:
+                self.lbl_resumen_fechas.configure(
+                    text=f"✓ {f1_txt} → {f2_txt} ({meses} meses)",
+                    text_color=COLORS.success
+                )
+            else:
+                self.lbl_resumen_fechas.configure(
+                    text="✕ Fecha fin debe ser posterior a inicio",
+                    text_color=COLORS.danger
+                )
+        except:
+            pass
+
+    def _validar_orden_fechas(self, f1_str, f2_str):
+        try:
+            d1 = datetime.strptime(f1_str, "%m/%Y")
+            d2 = datetime.strptime(f2_str, "%m/%Y")
+            return d2 >= d1
+        except:
             return False
 ```
 
@@ -2203,7 +2569,7 @@ class ExploratorioConfigPage(ctk.CTkFrame):
 ui/pages/exploratorio_resultados.py
 =====================================
 Pantalla de resultados del análisis exploratorio.
-Muestra: recomendación, tabla Pearson, scatters, sincronía temporal.
+Muestra: recomendación, diagnóstico avanzado, tabla Pearson, scatters, sincronía temporal.
 """
 
 import customtkinter as ctk
@@ -2212,6 +2578,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
+import os
+from PIL import Image
 from ui.theme import COLORS, FONTS, DIMS
 
 
@@ -2221,6 +2589,7 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         self.app = master
         self._resultados    = None
         self._recomendacion = None
+        self._diagnostico   = None
         self._build()
 
     def _build(self):
@@ -2278,7 +2647,7 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
     # ── Cálculos ──────────────────────────────────────────────────────────────
     def _calcular(self):
-        from core.exploratorio import calcular_correlaciones, recomendar_modelo
+        from core.exploratorio import calcular_correlaciones, recomendar_modelo, obtener_diagnostico_avanzado
         sesion   = self.app.session
         df       = sesion.get("df_datos")
         var_dep  = sesion.get("var_dependiente", "")
@@ -2289,11 +2658,13 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         self._resultados    = calcular_correlaciones(df, var_dep, vars_ind)
         self._recomendacion = recomendar_modelo(self._resultados)
+        self._diagnostico   = obtener_diagnostico_avanzado(df, var_dep, vars_ind)
 
-        # Guardar recomendación en sesión
+        # Guardar en sesión
         sesion["resultados_exploratorio"] = {
             "correlaciones":  self._resultados,
-            "recomendacion":  self._recomendacion
+            "recomendacion":  self._recomendacion,
+            "diagnostico":    self._diagnostico
         }
 
     # ── Cuerpo scrollable ─────────────────────────────────────────────────────
@@ -2310,6 +2681,10 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         self._build_card_recomendacion(self.scroll, fila)
         fila += 1
 
+        # 1.5 — Card Diagnóstico Avanzado
+        self._build_card_diagnostico(self.scroll, fila)
+        fila += 1
+
         # 2 — Card tabla Pearson
         self._build_card_tabla(self.scroll, fila)
         fila += 1
@@ -2320,6 +2695,10 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         # 4 — Sincronía temporal
         self._build_sincronia(self.scroll, fila)
+        fila += 1
+
+        # 4.5 — Guía de interpretación (Glosario)
+        self._build_glosario(self.scroll, fila)
         fila += 1
 
         # 5 — Botones de acción
@@ -2339,16 +2718,15 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         card.grid(row=fila, column=0, padx=48, pady=(24, 8), sticky="ew")
         card.grid_columnconfigure(1, weight=1)
 
-        # Ícono modelo
-        iconos = {"M1": "≡", "M2": "÷", "M3": "∿"}
-        icono  = iconos.get(rec["codigo"], "📊")
-
-        ctk.CTkLabel(
-            card,
-            text=icono,
-            font=(FONTS.family, 36),
-            text_color=COLORS.accent
-        ).grid(row=0, column=0, rowspan=2, padx=20, pady=20)
+        icon_map = {"M1": "m1_icon.png", "M2": "m2_icon.png", "M3": "m3_icon.png"}
+        icon_path = os.path.join("assets", icon_map.get(rec["codigo"], "m1_icon.png"))
+        
+        try:
+            pil_img = Image.open(icon_path)
+            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(48, 48))
+            ctk.CTkLabel(card, text="", image=ctk_img).grid(row=0, column=0, rowspan=2, padx=20, pady=20)
+        except:
+            ctk.CTkLabel(card, text="📊", font=(FONTS.family, 36), text_color=COLORS.accent).grid(row=0, column=0, rowspan=2, padx=20, pady=20)
 
         ctk.CTkLabel(
             card,
@@ -2360,8 +2738,8 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             card,
-            text="✦ Recomendación del Sistema",
-            font=(FONTS.family, FONTS.size_xs),
+            text="Recomendación del Sistema",
+            font=(FONTS.family, FONTS.size_xs, "bold"),
             text_color=COLORS.accent,
             anchor="w"
         ).grid(row=0, column=2, sticky="e", padx=20, pady=(20, 4))
@@ -2376,6 +2754,89 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
             justify="left"
         ).grid(row=1, column=1, columnspan=2,
                sticky="w", padx=(0, 20), pady=(0, 20))
+
+    # ── Card Diagnóstico ──────────────────────────────────────────────────────
+    def _build_card_diagnostico(self, parent, fila):
+        if not self._diagnostico:
+            return
+        
+        diag = self._diagnostico
+        card = self._card(parent, fila, "🔍  Calidad y Diagnóstico de los Datos")
+        
+        container = ctk.CTkFrame(card, fg_color="transparent")
+        container.pack(fill="x", padx=16, pady=(0, 16))
+        container.grid_columnconfigure((0, 1, 2), weight=1)
+
+        # --- A. OUTLIERS ---
+        out = diag["outliers"]
+        color_out = COLORS.danger if out["conteo"] > 0 else COLORS.success
+        f_out = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=color_out)
+        f_out.grid(row=0, column=0, padx=(0, 8), sticky="nsew")
+        
+        ctk.CTkLabel(f_out, text="Calidad de Datos", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        if out["conteo"] > 0:
+            msg = f"Se detectaron {out['conteo']} anomalías.\nEl consumo presenta picos fuera de lo común."
+            ctk.CTkLabel(f_out, text="ALERTA", font=(FONTS.family, 10, "bold"), text_color=COLORS.danger).pack()
+            ctk.CTkLabel(f_out, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200).pack(padx=10, pady=(4, 8))
+        else:
+            ctk.CTkLabel(f_out, text="Datos Limpios", font=(FONTS.family, 10, "bold"), text_color=COLORS.success).pack()
+            ctk.CTkLabel(f_out, text="No se detectaron valores inusuales en el periodo.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
+
+        # --- B. REDUNDANCIA ---
+        colin = diag["colinealidad"]
+        color_col = COLORS.warning if colin else COLORS.success
+        f_col = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=color_col)
+        f_col.grid(row=0, column=1, padx=4, sticky="nsew")
+
+        ctk.CTkLabel(f_col, text="Independencia", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        if colin:
+            msg = colin[0]["mensaje"]
+            ctk.CTkLabel(f_col, text="REDUNDANCIA", font=(FONTS.family, 10, "bold"), text_color=COLORS.warning).pack()
+            ctk.CTkLabel(f_col, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200).pack(padx=10, pady=(4, 8))
+        else:
+            ctk.CTkLabel(f_col, text="Óptima", font=(FONTS.family, 10, "bold"), text_color=COLORS.success).pack()
+            ctk.CTkLabel(f_col, text="Las variables aportan información única y valiosa.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
+
+        # --- C. COMPORTAMIENTO ESTACIONAL DEL CONSUMO ---
+        est = diag["estacionalidad"]
+        f_est = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=COLORS.primary)
+        f_est.grid(row=0, column=2, padx=(8, 0), sticky="nsew")
+
+        ctk.CTkLabel(f_est, text="Patrón del Consumo", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        if est and est["tipo"] != "N/D":
+            ctk.CTkLabel(f_est, text=est["tipo"].upper(), font=(FONTS.family, 10, "bold"), text_color=COLORS.primary).pack()
+            
+            tendencia = est.get("tendencia", {}).get("clase", "Estable")
+            msg = f"Tendencia a largo plazo: {tendencia}\nPeriodo Pico: {est['pico']}\nPeriodo Valle: {est['valle']}"
+            ctk.CTkLabel(f_est, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200, justify="left").pack(padx=10, pady=(4, 8))
+        else:
+            ctk.CTkLabel(f_est, text="No detectado", font=(FONTS.family, 10, "bold"), text_color=COLORS.text_secondary).pack()
+            ctk.CTkLabel(f_est, text="Datos insuficientes para análisis estacional.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
+
+    def _build_glosario(self, parent, fila):
+        card = ctk.CTkFrame(parent, fg_color="transparent")
+        card.grid(row=fila, column=0, padx=48, pady=(8, 24), sticky="ew")
+        
+        lbl = ctk.CTkLabel(
+            card, text="📖  Guía de Interpretación de Resultados",
+            font=(FONTS.family, FONTS.size_sm, "bold"),
+            text_color=COLORS.text_secondary
+        )
+        lbl.pack(anchor="w", pady=(0, 8))
+
+        texto_ayuda = (
+            "• Estacionalidad Estable: El consumo es constante; ningún mes varía más del 15% del promedio anual.\n"
+            "• Ciclos (Uni/Bimodal): Indican 1 o 2 periodos de alta demanda al año (estacionalidad clara).\n"
+            "• Tendencia a largo plazo: Indica si el edificio está aumentando o disminuyendo su carga base con el tiempo.\n"
+            "• Sincronía: Cuantifica qué tan parecidas son las formas de las curvas. Si es Alta Inversa, cuando una sube la otra siempre baja."
+        )
+
+        ctk.CTkLabel(
+            card, text=texto_ayuda,
+            font=(FONTS.family, 11),
+            text_color=COLORS.text_secondary,
+            justify="left", anchor="w"
+        ).pack(anchor="w", padx=10)
 
     # ── Card tabla Pearson ────────────────────────────────────────────────────
     def _build_card_tabla(self, parent, fila):
@@ -2412,57 +2873,24 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
                     ci, weight=1 if ancho == 0 else 0, minsize=ancho
                 )
 
-            # Variable
-            ctk.CTkLabel(
-                fila_frame,
-                text=res["variable"],
-                font=(FONTS.family, FONTS.size_xs, "bold"),
-                text_color=COLORS.primary, anchor="center"
-            ).grid(row=0, column=0, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=res["variable"], font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary, anchor="center").grid(row=0, column=0, sticky="ew", padx=6, pady=6)
 
-            # r Pearson
             r_val = res["r_pearson"]
             r_txt = f"{r_val:+.4f}" if r_val is not None else "—"
             r_color = self._color_r(r_val)
-            ctk.CTkLabel(
-                fila_frame, text=r_txt,
-                font=(FONTS.family_mono, FONTS.size_xs, "bold"),
-                text_color=r_color, anchor="center"
-            ).grid(row=0, column=1, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=r_txt, font=(FONTS.family_mono, FONTS.size_xs, "bold"), text_color=r_color, anchor="center").grid(row=0, column=1, sticky="ew", padx=6, pady=6)
 
-            # p-valor
             p_val = res["p_valor"]
             p_txt = f"{p_val:.4f}" if p_val is not None else "—"
             p_color = COLORS.success if res["significativa"] else COLORS.danger
-            ctk.CTkLabel(
-                fila_frame, text=p_txt,
-                font=(FONTS.family_mono, FONTS.size_xs),
-                text_color=p_color, anchor="center"
-            ).grid(row=0, column=2, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=p_txt, font=(FONTS.family_mono, FONTS.size_xs), text_color=p_color, anchor="center").grid(row=0, column=2, sticky="ew", padx=6, pady=6)
 
-            # Significativa
             sig_txt   = "✅ Sí" if res["significativa"] else "❌ No"
             sig_color = COLORS.success if res["significativa"] else COLORS.danger
-            ctk.CTkLabel(
-                fila_frame, text=sig_txt,
-                font=(FONTS.family, FONTS.size_xs, "bold"),
-                text_color=sig_color, anchor="center"
-            ).grid(row=0, column=3, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=sig_txt, font=(FONTS.family, FONTS.size_xs, "bold"), text_color=sig_color, anchor="center").grid(row=0, column=3, sticky="ew", padx=6, pady=6)
 
-            # Grado
-            ctk.CTkLabel(
-                fila_frame, text=res["grado"],
-                font=(FONTS.family, FONTS.size_xs),
-                text_color=COLORS.text_secondary, anchor="center"
-            ).grid(row=0, column=4, sticky="ew", padx=6, pady=6)
-
-            # Interpretación
-            ctk.CTkLabel(
-                fila_frame, text=res["interpretacion"],
-                font=(FONTS.family, FONTS.size_xs),
-                text_color=COLORS.text_primary,
-                anchor="w", wraplength=300, justify="left"
-            ).grid(row=0, column=5, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=res["grado"], font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary, anchor="center").grid(row=0, column=4, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=res["interpretacion"], font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_primary, anchor="w", wraplength=300, justify="left").grid(row=0, column=5, sticky="ew", padx=6, pady=6)
 
         ctk.CTkFrame(card, fg_color="transparent", height=12).pack()
 
@@ -2478,12 +2906,8 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         from core.exploratorio import preparar_datos_scatter
 
-        card = self._card(
-            parent, fila,
-            "📊  Análisis de Dispersión y Proporcionalidad"
-        )
+        card = self._card(parent, fila, "📊  Análisis de Dispersión y Proporcionalidad")
 
-        # Grid de scatters: 2 columnas
         grid = ctk.CTkFrame(card, fg_color="transparent")
         grid.pack(fill="x", padx=16, pady=(0, 16))
         grid.grid_columnconfigure((0, 1), weight=1)
@@ -2494,16 +2918,8 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
             row   = idx // 2
 
             fig = self._crear_scatter(datos, var_dep, var)
-            canvas_frame = ctk.CTkFrame(
-                grid, fg_color=COLORS.bg_card,
-                corner_radius=8,
-                border_width=1, border_color=COLORS.border
-            )
-            canvas_frame.grid(
-                row=row, column=col,
-                padx=(0, 8) if col == 0 else 0,
-                pady=8, sticky="nsew"
-            )
+            canvas_frame = ctk.CTkFrame(grid, fg_color=COLORS.bg_card, corner_radius=8, border_width=1, border_color=COLORS.border)
+            canvas_frame.grid(row=row, column=col, padx=(0, 8) if col == 0 else 0, pady=8, sticky="nsew")
             canvas = FigureCanvasTkAgg(fig, master=canvas_frame)
             canvas.draw()
             canvas.get_tk_widget().pack(fill="both", expand=True, padx=8, pady=8)
@@ -2513,40 +2929,20 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         fig, ax = plt.subplots(figsize=(5, 3.5))
         fig.patch.set_facecolor(COLORS.bg_card)
         ax.set_facecolor("#F8FAF9")
-
-        x, y = datos["x"], datos["y"]
-        r    = datos["r"]
-        p    = datos["p_valor"]
-
-        # Puntos
-        ax.scatter(x, y, color=COLORS.primary, alpha=0.7,
-                   s=50, zorder=3, edgecolors="white", linewidths=0.5)
-
-        # Línea tendencia
+        ax.scatter(datos["x"], datos["y"], color=COLORS.primary, alpha=0.7, s=50, zorder=3, edgecolors="white", linewidths=0.5)
         if len(datos["x_trend"]) > 0:
-            ax.plot(datos["x_trend"], datos["y_trend"],
-                    color=COLORS.accent, linewidth=2,
-                    linestyle="--", zorder=2)
-
-        # Etiquetas
-        ax.set_xlabel(var_ind, fontsize=9,
-                      color=COLORS.text_secondary, fontfamily="sans-serif")
-        ax.set_ylabel(var_dep, fontsize=9,
-                      color=COLORS.text_secondary, fontfamily="sans-serif")
-
+            ax.plot(datos["x_trend"], datos["y_trend"], color=COLORS.accent, linewidth=2, linestyle="--", zorder=2)
+        ax.set_xlabel(var_ind, fontsize=9, color=COLORS.text_secondary)
+        ax.set_ylabel(var_dep, fontsize=9, color=COLORS.text_secondary)
         titulo = f"Dispersión: {var_dep} vs {var_ind}"
-        if r is not None:
-            sig = "✓ sig." if (p is not None and p < 0.05) else "✗ no sig."
-            titulo += f"\nr = {r:+.3f}  |  p = {p:.4f}  |  {sig}"
-
-        ax.set_title(titulo, fontsize=8.5, color=COLORS.primary,
-                     fontweight="bold", pad=10)
-
+        if datos["r"] is not None:
+            sig = "✓ sig." if (datos["p_valor"] < 0.05) else "✗ no sig."
+            titulo += f"\nr = {datos['r']:+.3f}  |  p = {datos['p_valor']:.4f}  |  {sig}"
+        ax.set_title(titulo, fontsize=8.5, color=COLORS.primary, fontweight="bold", pad=10)
         ax.tick_params(colors=COLORS.text_secondary, labelsize=8)
         ax.spines[["top", "right"]].set_visible(False)
         ax.spines[["left", "bottom"]].set_color(COLORS.border)
         ax.grid(True, alpha=0.3, color=COLORS.border)
-
         fig.tight_layout()
         return fig
 
@@ -2557,177 +2953,107 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         var_dep  = sesion.get("var_dependiente", "")
         vars_ind = sesion.get("vars_independientes", [])
 
-        if df is None:
-            return
+        if df is None: return
 
-        from core.exploratorio import preparar_datos_sincronia
+        from core.exploratorio import preparar_datos_sincronia, calcular_puntajes_sincronia
         datos = preparar_datos_sincronia(df, var_dep, vars_ind)
+        # Diagnóstico de sincronía basado en Pearson
+        diagnosticos = calcular_puntajes_sincronia(self._resultados if self._resultados else [])
 
-        card = self._card(
-            parent, fila,
-            "📈  Sincronía Temporal (Consumo vs Variables)"
-        )
+        card = self._card(parent, fila, "📈  Sincronía Temporal (Consumo vs Variables)")
 
         fig = self._crear_sincronia(datos, var_dep)
         canvas = FigureCanvasTkAgg(fig, master=card)
         canvas.draw()
-        canvas.get_tk_widget().pack(
-            fill="both", expand=True, padx=16, pady=(0, 16)
-        )
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=16, pady=(0, 4))
         plt.close(fig)
+
+        # NOTA EXPLICATIVA + PUNTAJES
+        insight_frame = ctk.CTkFrame(card, fg_color=COLORS.bg_main, corner_radius=8)
+        insight_frame.pack(fill="x", padx=16, pady=(0, 16))
+        
+        ctk.CTkLabel(
+            insight_frame,
+            text="💡 Guía Visual: Observa si el consumo y las variables suben y bajan al mismo tiempo (Directa) o en sentido contrario (Inversa).",
+            font=(FONTS.family, FONTS.size_xs, "bold"),
+            text_color=COLORS.primary, anchor="w", wraplength=700, justify="left"
+        ).pack(padx=12, pady=(8, 4), anchor="w")
+
+        resumen_sync = []
+        for var, d in diagnosticos.items():
+            if var == var_dep: continue
+            resumen_sync.append(f"• {var}: {d['porcentaje']}% de sincronía — {d['mensaje']}")
+        
+        txt_sync = "\n".join(resumen_sync) if resumen_sync else "No hay variables para comparar."
+        
+        ctk.CTkLabel(
+            insight_frame, text=txt_sync, font=(FONTS.family, FONTS.size_xs),
+            text_color=COLORS.text_primary, justify="left", anchor="w"
+        ).pack(padx=12, pady=(0, 12), anchor="w")
 
     def _crear_sincronia(self, datos, var_dep):
         fechas = datos["fechas"]
         series = datos["series"]
         n      = len(fechas)
-
         fig, ax = plt.subplots(figsize=(11, 3.5))
         fig.patch.set_facecolor(COLORS.bg_card)
         ax.set_facecolor("#F8FAF9")
-
-        colores = [COLORS.primary, COLORS.accent,
-                   "#E63946", "#F4A261", "#2D6A4F", "#457B9D"]
-
+        colores = [COLORS.primary, COLORS.accent, "#E63946", "#F4A261", "#2D6A4F", "#457B9D"]
         for idx, (nombre, valores) in enumerate(series.items()):
             color  = colores[idx % len(colores)]
             estilo = "-" if nombre == var_dep else "--"
             grosor = 2.5 if nombre == var_dep else 1.5
-            ax.plot(range(n), valores,
-                    color=color, linewidth=grosor,
-                    linestyle=estilo, label=nombre, zorder=3)
-
-        # Eje X con etiquetas de fecha
+            ax.plot(range(n), valores, color=color, linewidth=grosor, linestyle=estilo, label=nombre, zorder=3)
         paso = max(1, n // 12)
         ax.set_xticks(range(0, n, paso))
-        ax.set_xticklabels(
-            [fechas[i] for i in range(0, n, paso)],
-            rotation=45, ha="right", fontsize=7,
-            color=COLORS.text_secondary
-        )
-
-        ax.set_ylabel("Valor normalizado (0–1)", fontsize=9,
-                      color=COLORS.text_secondary)
-        ax.set_title(
-            "Comparativa de Patrones Temporales (Variables vs Consumo)",
-            fontsize=9, color=COLORS.primary, fontweight="bold"
-        )
-
-        ax.legend(fontsize=8, loc="upper right",
-                  framealpha=0.9, edgecolor=COLORS.border)
+        ax.set_xticklabels([fechas[i] for i in range(0, n, paso)], rotation=45, ha="right", fontsize=7, color=COLORS.text_secondary)
+        ax.set_ylabel("Valor normalizado (0–1)", fontsize=9, color=COLORS.text_secondary)
+        ax.set_title("Comparativa de Comportamientos Temporales (Normalizados)", fontsize=9, color=COLORS.primary, fontweight="bold")
+        ax.legend(fontsize=8, loc="upper right", framealpha=0.9, edgecolor=COLORS.border)
         ax.tick_params(colors=COLORS.text_secondary, labelsize=8)
         ax.spines[["top", "right"]].set_visible(False)
         ax.spines[["left", "bottom"]].set_color(COLORS.border)
         ax.grid(True, alpha=0.3, color=COLORS.border)
-        ax.set_ylim(-0.05, 1.05)
-
         fig.tight_layout()
         return fig
 
-    # ── Botones de acción ─────────────────────────────────────────────────────
+    # ── Botones ───────────────────────────────────────────────────────────────
     def _build_botones(self, parent, fila):
-        frame = ctk.CTkFrame(parent, fg_color=COLORS.bg_card,
-                             corner_radius=0, height=70)
+        frame = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=0, height=70)
         frame.grid(row=fila, column=0, sticky="ew", padx=0, pady=(8, 0))
         frame.grid_propagate(False)
         frame.grid_columnconfigure(1, weight=1)
-
-        # Botón actualizar Excel
-        ctk.CTkButton(
-            frame,
-            text="📊  Actualizar informe en Excel",
-            font=(FONTS.family, FONTS.size_sm, "bold"),
-            fg_color=COLORS.accent,
-            text_color=COLORS.primary,
-            hover_color="#D4E800",
-            corner_radius=DIMS.button_radius,
-            height=40,
-            command=self._actualizar_excel
-        ).grid(row=0, column=0, padx=24, pady=15, sticky="w")
-
-        # Botón continuar
-        ctk.CTkButton(
-            frame,
-            text="Continuar a selección de modelo →",
-            font=(FONTS.family, FONTS.size_sm, "bold"),
-            fg_color=COLORS.primary,
-            text_color=COLORS.text_white,
-            hover_color=COLORS.primary_dark,
-            corner_radius=DIMS.button_radius,
-            height=40,
-            command=lambda: self.app.navegar("seleccion_modelo")
-        ).grid(row=0, column=2, padx=24, pady=15, sticky="e")
-
-    # ── Actualizar Excel ──────────────────────────────────────────────────────
-    def _actualizar_excel(self):
-        from tkinter import filedialog
-        from core.io_excel import escribir_resultados_exploratorios
-
-        if not self._resultados or not self._recomendacion:
-            messagebox.showwarning(
-                "Sin resultados",
-                "Primero ejecuta el análisis antes de exportar."
-            )
-            return
-
-        path = filedialog.askopenfilename(
-            title="Seleccionar Excel exploratorio para actualizar",
-            filetypes=[("Excel", "*.xlsx")]
-        )
-        if not path:
-            return
-
-        tabla = self._resultados
-        rec   = self._recomendacion
-
-        ok = escribir_resultados_exploratorios(
-            path            = path,
-            recomendacion   = rec["titulo"],
-            justificacion   = rec["justificacion"],
-            tabla_resultados= tabla
-        )
-        if ok:
-            messagebox.showinfo(
-                "Excel actualizado",
-                "Los resultados fueron escritos correctamente en el Excel."
-            )
+        ctk.CTkButton(frame, text="📊  Actualizar informe en Excel", font=(FONTS.family, FONTS.size_sm, "bold"), fg_color=COLORS.accent, text_color=COLORS.primary, hover_color="#D4E800", corner_radius=DIMS.button_radius, height=40, command=self._actualizar_excel).grid(row=0, column=0, padx=24, pady=15, sticky="w")
+        ctk.CTkButton(frame, text="Continuar a selección de modelo →", font=(FONTS.family, FONTS.size_sm, "bold"), fg_color=COLORS.primary, text_color=COLORS.text_white, hover_color=COLORS.primary_dark, corner_radius=DIMS.button_radius, height=40, command=lambda: self.app.navegar("seleccion_modelo")).grid(row=0, column=2, padx=24, pady=15, sticky="e")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+    def _actualizar_excel(self):
+        from core.io_excel import escribir_resultados_exploratorios
+        sesion = self.app.session
+        if self._resultados is None: return
+        path = sesion.get("excel_path")
+        if not path:
+            from tkinter import filedialog
+            path = filedialog.askopenfilename(title="Seleccionar Excel", filetypes=[("Excel", "*.xlsx")])
+        if not path: return
+        ok = escribir_resultados_exploratorios(path=path, recomendacion=self._recomendacion["titulo"], justificacion=self._recomendacion["justificacion"], tabla_resultados=self._resultados)
+        if ok: messagebox.showinfo("Éxito", f"Excel actualizado en:\n{path}")
+
     def _card(self, parent, fila, titulo):
-        card = ctk.CTkFrame(
-            parent,
-            fg_color=COLORS.bg_card,
-            corner_radius=DIMS.card_radius,
-            border_width=1,
-            border_color=COLORS.border
-        )
+        card = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
         card.grid(row=fila, column=0, padx=48, pady=8, sticky="ew")
         card.grid_columnconfigure(0, weight=1)
-
-        # Título con acento izquierdo
         header = ctk.CTkFrame(card, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(14, 10))
-
-        ctk.CTkFrame(
-            header, fg_color=COLORS.accent,
-            width=4, corner_radius=2
-        ).pack(side="left", fill="y", padx=(0, 10))
-
-        ctk.CTkLabel(
-            header, text=titulo,
-            font=(FONTS.family, FONTS.size_sm, "bold"),
-            text_color=COLORS.primary, anchor="w"
-        ).pack(side="left")
-
+        ctk.CTkFrame(header, fg_color=COLORS.accent, width=4, corner_radius=2).pack(side="left", fill="y", padx=(0, 10))
+        ctk.CTkLabel(header, text=titulo, font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary, anchor="w").pack(side="left")
         return card
 
     def _color_r(self, r):
-        if r is None:
-            return COLORS.text_secondary
+        if r is None: return COLORS.text_secondary
         r_abs = abs(r)
-        if r_abs >= 0.70:
-            return COLORS.success
-        elif r_abs >= 0.50:
-            return COLORS.warning
+        if r_abs >= 0.70: return COLORS.success
+        elif r_abs >= 0.50: return COLORS.warning
         return COLORS.danger
 ```
 
@@ -2771,57 +3097,52 @@ class HomePage(ctk.CTkFrame):
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
         
-        # Contenedor centrado
-        center_container = ctk.CTkFrame(sidebar, fg_color="transparent")
-        center_container.place(relx=0.5, rely=0.5, anchor="center")
+        # Espaciador superior para centrar verticalmente
+        ctk.CTkFrame(sidebar, fg_color="transparent", height=1).pack(expand=True)
 
-        # Logo / ícono
+        # Contenedor de contenido
+        cnt = ctk.CTkFrame(sidebar, fg_color="transparent")
+        cnt.pack(fill="x")
+
+        # Logo
         logo_path = os.path.join("assets", "logo_lben.png")
         if os.path.exists(logo_path):
             img = ctk.CTkImage(light_image=Image.open(logo_path),
                                dark_image=Image.open(logo_path),
-                               size=(120, 120))
-            ctk.CTkLabel(center_container, image=img, text="").pack(pady=(0, 20))
+                               size=(130, 130))
+            ctk.CTkLabel(cnt, image=img, text="").pack(pady=(0, 20))
         else:
-            ctk.CTkLabel(center_container, text="⚡", font=(FONTS.family, 42), text_color=COLORS.accent).pack(pady=(0, 20))
+            ctk.CTkLabel(cnt, text="⚡", font=(FONTS.family, 42), text_color=COLORS.accent).pack(pady=(0, 20))
 
-        # Nombre app
+        # Textos
         ctk.CTkLabel(
-            center_container,
-            text="Línea Base\nEnergética",
+            cnt, text="Línea Base\nEnergética",
             font=(FONTS.family, FONTS.size_lg, "bold"),
-            text_color=COLORS.text_white,
-            justify="center"
+            text_color=COLORS.text_white, justify="center"
         ).pack(pady=(0, 4))
 
         ctk.CTkLabel(
-            center_container,
-            text="Resolución UPME\n016 de 2024",
+            cnt, text="Resolución UPME\n016 de 2024",
             font=(FONTS.family, FONTS.size_xs),
-            text_color="#7A9B8E",
-            justify="center"
+            text_color="#7A9B8E", justify="center"
         ).pack(pady=(0, 24))
 
         # Separador
-        ctk.CTkFrame(
-            center_container, fg_color="#2D4F45",
-            height=1, corner_radius=0, width=150
-        ).pack(pady=8)
+        ctk.CTkFrame(cnt, fg_color="#2D4F45", height=1, width=160).pack(pady=8)
 
         # Subtítulo
         ctk.CTkLabel(
-            center_container,
-            text="Modelos de referencia para\neficiencia energética",
+            cnt, text="Modelos de referencia para\nmonitoreo del\nDesempeño Energético",
             font=(FONTS.family, FONTS.size_xs),
-            text_color="#7A9B8E",
-            justify="center",
-            wraplength=180
+            text_color="#7A9B8E", justify="center", wraplength=180
         ).pack(pady=(16, 0))
 
-        # Versión al fondo del sidebar (no del contenedor)
+        # Espaciador inferior para empujar la versión al fondo
+        ctk.CTkFrame(sidebar, fg_color="transparent", height=1).pack(expand=True)
+
+        # Versión
         ctk.CTkLabel(
-            sidebar,
-            text="v1.0.0",
+            sidebar, text="v1.0.0",
             font=(FONTS.family, FONTS.size_xs),
             text_color="#4A6B5E"
         ).pack(side="bottom", pady=16)
@@ -2866,7 +3187,7 @@ class HomePage(ctk.CTkFrame):
         self._feature_card(features, "📊", "3 Modelos",
                            "Absoluto · Cociente · Métodos Estadísticos", 0)
         self._feature_card(features, "📥", "Hojas de Cálculo",
-                           "Descarga y edita tus datos", 1)
+                           "Descarga y Edita tus Datos", 1)
         self._feature_card(features, "📈", "Gráficos",
                            "Línea base · Desempeño Acum.", 2)
 
@@ -3171,6 +3492,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from datetime import datetime
 from ui.theme import COLORS, FONTS, DIMS
+from ui.components import SelectorFecha
 
 class M1ConfigPage(ctk.CTkFrame):
     def __init__(self, master):
@@ -3243,11 +3565,16 @@ class M1ConfigPage(ctk.CTkFrame):
 
         # 2. Periodo Base
         self._seccion_label(card, "Periodo Base (Histórico)", row=3)
-        self.entry_pb_ini, self.entry_pb_fin = self._date_range(card, 4)
+        # _date_range_picker usa row y row+1 (4 y 5)
+        self.sel_pb_ini, self.sel_pb_fin, self.lbl_resumen_pb = self._date_range_picker(card, 4)
 
         # 3. Periodo de Reporte
-        self._seccion_label(card, "Periodo de Reporte (Seguimiento)", row=5)
-        self.entry_pr_ini, self.entry_pr_fin = self._date_range(card, 6)
+        self._seccion_label(card, "Periodo de Reporte (Seguimiento)", row=6)
+        # _date_range_picker usa row y row+1 (7 y 8)
+        self.sel_pr_ini, self.sel_pr_fin, self.lbl_resumen_pr = self._date_range_picker(card, 7)
+
+        # Inicializar resúmenes
+        self._actualizar_todos_los_resumenes()
 
         # Botón Acción
         self._build_botones(scroll)
@@ -3285,14 +3612,22 @@ class M1ConfigPage(ctk.CTkFrame):
         e.grid(row=1, column=0, sticky="ew")
         return e
 
-    def _date_range(self, parent, row):
+    def _date_range_picker(self, parent, row):
         f = ctk.CTkFrame(parent, fg_color="transparent")
-        f.grid(row=row, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 16))
+        f.grid(row=row, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 4))
         f.grid_columnconfigure((0, 1), weight=1)
         
-        e_ini = self._entry_with_label(f, "Fecha Inicio (MM/AAAA)", "01/2021", 0, 0)
-        e_fin = self._entry_with_label(f, "Fecha Fin (MM/AAAA)", "12/2023", 0, 1)
-        return e_ini, e_fin
+        sel_ini = SelectorFecha(f, label_text="Fecha Inicio", command=self._actualizar_todos_los_resumenes)
+        sel_ini.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        
+        sel_fin = SelectorFecha(f, label_text="Fecha Fin", command=self._actualizar_todos_los_resumenes)
+        sel_fin.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+
+        lbl = ctk.CTkLabel(parent, text="", font=(FONTS.family, FONTS.size_xs, "italic"),
+                           text_color=COLORS.success, anchor="w")
+        lbl.grid(row=row+1, column=0, sticky="w", padx=DIMS.padding_card, pady=(0, 16))
+        
+        return sel_ini, sel_fin, lbl
 
     def _confirmar_y_descargar(self):
         # Lógica de guardado en sesión y llamada a io_excel
@@ -3300,29 +3635,57 @@ class M1ConfigPage(ctk.CTkFrame):
             "nombre": self.entry_nombre.get().strip(),
             "fuente": self.entry_fuente.get().strip(),
             "unidad": self.entry_unidad.get().strip(),
-            "pb_ini": self.entry_pb_ini.get().strip(),
-            "pb_fin": self.entry_pb_fin.get().strip(),
-            "pr_ini": self.entry_pr_ini.get().strip(),
-            "pr_fin": self.entry_pr_fin.get().strip(),
+            "pb_ini": self.sel_pb_ini.get_value(),
+            "pb_fin": self.sel_pb_fin.get_value(),
+            "pr_ini": self.sel_pr_ini.get_value(),
+            "pr_fin": self.sel_pr_fin.get_value(),
         }
 
-        if not all(data.values()):
-            messagebox.showwarning("Campos faltantes", "Por favor completa todos los campos.")
+        if not data["nombre"] or not data["fuente"] or not data["unidad"]:
+            messagebox.showwarning("Campos faltantes", "Por favor completa la identificación del proyecto.")
+            return
+
+        # Validar lógica de rangos
+        if not self._validar_rango(data["pb_ini"], data["pb_fin"]):
+            messagebox.showerror("Rango inválido", "En Periodo Base, la fecha fin debe ser posterior a inicio.")
+            return
+        if not self._validar_rango(data["pr_ini"], data["pr_fin"]):
+            messagebox.showerror("Rango inválido", "En Periodo Reporte, la fecha fin debe ser posterior a inicio.")
             return
 
         # Guardar en sesión
         self.app.session.update(data)
         
-        # Llamar a io_excel (pendiente implementar en Paso 2)
         from core.io_excel import generar_plantilla_m1
         if generar_plantilla_m1(data):
-            # Opcional: navegar a carga
             pass
 
-    def _validar_fecha(self, f):
+    def _actualizar_todos_los_resumenes(self):
+        self._actualizar_etiqueta_rango(self.sel_pb_ini, self.sel_pb_fin, self.lbl_resumen_pb)
+        self._actualizar_etiqueta_rango(self.sel_pr_ini, self.sel_pr_fin, self.lbl_resumen_pr)
+
+    def _actualizar_etiqueta_rango(self, sel_ini, sel_fin, lbl):
+        f1 = sel_ini.get_value()
+        f2 = sel_fin.get_value()
         try:
-            datetime.strptime(f, "%m/%Y")
-            return True
+            d1 = datetime.strptime(f1, "%m/%Y")
+            d2 = datetime.strptime(f2, "%m/%Y")
+            meses = (d2.year - d1.year) * 12 + (d2.month - d1.month) + 1
+            meses_abr = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+            f1_txt = f"{meses_abr[d1.month-1]}-{d1.year}"
+            f2_txt = f"{meses_abr[d2.month-1]}-{d2.year}"
+            
+            if meses > 0:
+                lbl.configure(text=f"✓ {f1_txt} → {f2_txt} ({meses} meses)", text_color=COLORS.success)
+            else:
+                lbl.configure(text="✕ Rango inválido", text_color=COLORS.danger)
+        except: pass
+
+    def _validar_rango(self, f1_str, f2_str):
+        try:
+            d1 = datetime.strptime(f1_str, "%m/%Y")
+            d2 = datetime.strptime(f2_str, "%m/%Y")
+            return d2 >= d1
         except: return False
 
 ```
@@ -3590,7 +3953,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             topbar,
-            text="Selecciona el modelo estadístico",
+            text="Selecciona el modelo de LBEn",
             font=(FONTS.family, FONTS.size_md, "bold"),
             text_color=COLORS.primary
         ).grid(row=0, column=1, sticky="w", padx=8)
@@ -3619,8 +3982,8 @@ class SeleccionModeloPage(ctk.CTkFrame):
         # Subtítulo
         ctk.CTkLabel(
             cuerpo,
-            text="Los modelos están ordenados de menor a mayor complejidad. "
-                 "Elige el que mejor se adapte a tus datos y objetivos.",
+            text="Elige el modelo que mejor se adapte a tus datos y objetivos."
+                 " Aparecerá resaltado el modelo recomendado en el ultimo análisis exploratorio",
             font=(FONTS.family, FONTS.size_sm),
             text_color=COLORS.text_secondary,
             justify="left"
@@ -3635,58 +3998,51 @@ class SeleccionModeloPage(ctk.CTkFrame):
         modelos = [
             {
                 "codigo":    "M1",
-                "icono":     "≡",
-                "titulo":    "Modelo de Promedio",
-                "subtitulo": "Consumo Absoluto",
+                "titulo":    "Consumo Absoluto",
+                "subtitulo": "Promedios Mensuales",
                 "descripcion": (
                     "Estima la línea base como el promedio del "
                     "consumo histórico mensual.\n\n"
                     "Ideal cuando el consumo es relativamente "
-                    "constante y no depende de variables externas."
+                    "constante y no depende o no se dispone de variables externas."
                 ),
                 "variables": "Solo consumo energético",
-                "recomendado_para": "Procesos continuos, clima estable",
+                "recomendado_para": "Edificios con consumo estable",
                 "destino": "m1_config"
             },
             {
                 "codigo":    "M2",
-                "icono":     "÷",
                 "titulo":    "Modelo de Cociente",
                 "subtitulo": "Consumo Normalizado",
                 "descripcion": (
                     "Calcula un índice de consumo energético "
-                    "normalizado por una variable (Ej: kWh/persona).\n\n"
-                    "Útil cuando el consumo escala con una sola "
-                    "variable como producción o área."
+                    "normalizado por una variable (Ej: kWh/visitantes).\n\n"
+                    "Útil cuando el consumo escala proporcionalmente con una sola "
+                    "variable como usuarios o área."
                 ),
-                "variables": "Consumo + 1 variable de producción",
+                "variables": "Consumo + 1 variable",
                 "recomendado_para": "Edificios con ocupación variable",
                 "destino": "m2_config"
             },
             {
                 "codigo":    "M3",
-                "icono":     "∿",
-                "titulo":    "Regresión Lineal",
-                "subtitulo": "Modelo Estadístico",
+                "titulo":    "Modelos Estadísticos",
+                "subtitulo": "Regresión Lineal",
                 "descripcion": (
-                    "Predice el consumo en función de una o más "
+                    "Calcula el consumo en función de una o más "
                     "variables independientes estadísticamente "
                     "significativas.\n\n"
-                    "Puede detectar relaciones complejas entre "
-                    "variables y permite detectar ahorros "
-                    "estadísticamente precisos."
+                    "Puede detectar relaciones complejas entre variables"
                 ),
                 "variables": "Consumo + 1 o más variables significativas",
-                "recomendado_para": "Edificios con múltiples factores",
+                "recomendado_para": "Edificios con múltiples variables disponibles",
                 "destino": "m3_config"
             }
         ]
 
         for col, modelo in enumerate(modelos):
             es_rec = modelo["codigo"] == self._recomendacion
-            self._build_card_modelo(
-                cards_frame, modelo, col, es_rec
-            )
+            self._build_card_modelo(cards_frame, modelo, col, es_rec)
 
     # ── Card modelo ───────────────────────────────────────────────────────────
     def _build_card_modelo(self, parent, modelo, col, es_recomendado):
@@ -3729,41 +4085,47 @@ class SeleccionModeloPage(ctk.CTkFrame):
             sticky="nsew", pady=4
         )
         card.grid_columnconfigure(0, weight=1)
-        card.grid_rowconfigure(2, weight=1)
 
         # Badge recomendado
         if es_recomendado:
-            badge = ctk.CTkFrame(
-                card, fg_color=COLORS.accent,
-                corner_radius=12, height=24
-            )
-            badge.grid(row=0, column=0, padx=16, pady=(16, 0), sticky="w")
+            badge = ctk.CTkFrame(card, fg_color=COLORS.success, corner_radius=10, height=24)
+            badge.place(relx=1.0, x=-10, y=10, anchor="ne")
             ctk.CTkLabel(
-                badge,
-                text="  ✦ Recomendado  ",
-                font=(FONTS.family, FONTS.size_xs, "bold"),
-                text_color=COLORS.primary
-            ).pack(padx=4, pady=2)
+                badge, text="RECOMENDADO", 
+                font=(FONTS.family, 10, "bold"),
+                text_color="white", padx=10
+            ).pack()
         else:
             ctk.CTkFrame(
                 card, fg_color="transparent", height=24
-            ).grid(row=0, column=0, pady=(16, 0))
+            ).grid(row=0, column=0, padx=16, pady=(16, 0), sticky="w")
 
-        # Ícono
-        ctk.CTkLabel(
-            card,
-            text=modelo["icono"],
-            font=(FONTS.family, 42),
-            text_color=fg_icono
-        ).grid(row=1, column=0, pady=(12, 4))
+        # Ícono / Ilustración
+        from PIL import Image
+        import os
+        
+        modelo_id = modelo["codigo"]
+        icon_map = {"M1": "m1_icon.png", "M2": "m2_icon.png", "M3": "m3_icon.png"}
+        icon_path = os.path.join("assets", icon_map.get(modelo_id, "m1_icon.png"))
+        
+        try:
+            pil_img = Image.open(icon_path)
+            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(48, 48))
+            icon_label = ctk.CTkLabel(card, text="", image=ctk_img)
+            icon_label.grid(row=1, column=0, padx=16, pady=(8, 0), sticky="w")
+        except:
+            ctk.CTkLabel(
+                card, text="📊", font=(FONTS.family, 32),
+                text_color=fg_icono
+            ).grid(row=1, column=0, padx=16, pady=(8, 0), sticky="w")
 
         # Título
         ctk.CTkLabel(
             card,
             text=modelo["titulo"],
-            font=(FONTS.family, FONTS.size_lg, "bold"),
+            font=(FONTS.family, FONTS.size_md, "bold"),
             text_color=fg_titulo
-        ).grid(row=2, column=0, pady=(0, 2))
+        ).grid(row=2, column=0, padx=16, pady=(16, 0), sticky="w")
 
         # Subtítulo
         ctk.CTkLabel(
@@ -3771,7 +4133,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
             text=modelo["subtitulo"],
             font=(FONTS.family, FONTS.size_xs),
             text_color=fg_sub
-        ).grid(row=3, column=0, pady=(0, 12))
+        ).grid(row=3, column=0, padx=16, pady=(0, 12), sticky="w")
 
         # Separador
         ctk.CTkFrame(
@@ -3790,14 +4152,19 @@ class SeleccionModeloPage(ctk.CTkFrame):
             justify="center"
         ).grid(row=5, column=0, padx=16, pady=(0, 16))
 
-        # Variables
+        # --- FILA ELÁSTICA (ESPACIADOR) ---
+        # Fila 6 absorbe espacio y empuja lo demás al fondo
+        card.grid_rowconfigure(6, weight=1)
+        ctk.CTkFrame(card, fg_color="transparent", height=1).grid(row=6, column=0)
+
+        # Variables (Cuadro Gris)
         info_frame = ctk.CTkFrame(
             card,
             fg_color=COLORS.primary_dark if es_recomendado else COLORS.bg_main,
             corner_radius=8
         )
-        info_frame.grid(row=6, column=0, sticky="ew",
-                        padx=16, pady=(0, 8))
+        info_frame.grid(row=7, column=0, sticky="ew",
+                        padx=16, pady=(0, 12))
 
         ctk.CTkLabel(
             info_frame,
@@ -3840,7 +4207,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
             corner_radius=DIMS.button_radius,
             height=40,
             command=lambda d=modelo["destino"]: self.app.navegar(d)
-        ).grid(row=7, column=0, padx=16, pady=(8, 20), sticky="ew")
+        ).grid(row=8, column=0, padx=16, pady=(0, 20), sticky="ew")
 ```
 
 ## State

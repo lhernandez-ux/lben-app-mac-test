@@ -8,6 +8,7 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from ui.theme import COLORS, FONTS, DIMS
 import pandas as pd
+from core.models.m1_absoluto import procesar_m1, calcular_resumen_metricas
 
 class M1CargaPage(ctk.CTkFrame):
     def __init__(self, master):
@@ -127,10 +128,27 @@ class M1CargaPage(ctk.CTkFrame):
         ).grid(row=2, column=0, pady=32)
 
     def _procesar_m1(self):
-        # Guardar en sesión para el siguiente paso
-        self.app.session["df_base"] = self.df_base
-        self.app.session["df_monitoreo"] = self.df_monitoreo
-        self.app.session["meta_m1"] = self.meta
-        
-        # Navegar a resultados (pendiente crear en Paso 5)
-        self.app.navegar("m1_resultados")
+        if self.df_base is None:
+            messagebox.showwarning("Sin datos", "Por favor carga un archivo Excel primero.")
+            return
+
+        try:
+            # Ejecutar el motor de cálculo
+            df_lben, df_mon_res, df_base_final = procesar_m1(self.df_base, self.df_monitoreo)
+            
+            # Calcular métricas para la ficha técnica
+            metricas = calcular_resumen_metricas(df_lben, self.df_base)
+            
+            # Guardar todo en sesión
+            self.app.session["df_base_raw"] = self.df_base
+            self.app.session["df_base_final"] = df_base_final # Nueva columna K y L procesada
+            self.app.session["df_lben"] = df_lben
+            self.app.session["df_monitoreo"] = df_mon_res
+            self.app.session["meta_m1"] = self.meta
+            self.app.session["metricas_m1"] = metricas
+            
+            # Navegar a resultados
+            self.app.navegar("m1_resultados")
+            
+        except Exception as e:
+            messagebox.showerror("Error en el cálculo", f"No se pudo procesar el modelo: {e}")

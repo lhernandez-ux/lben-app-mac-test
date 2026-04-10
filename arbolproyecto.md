@@ -19,6 +19,9 @@ LBEn_APP_Resol016/
 ├── docs/
 ├── assets/
 │   ├── logo_lben.png
+│   ├── m1_icon.png
+│   ├── m2_icon.png
+│   ├── m3_icon.png
 ├── data/
 │   ├── Plantilla_LBEn_M1_modelo.xlsx
 │   ├── plantilla_exploracion_modelo.xlsx
@@ -35,6 +38,7 @@ LBEn_APP_Resol016/
 │   ├── theme.py
 │   ├── components/
 │   │   ├── __init__.py
+│   │   ├── selector_fecha.py
 │   ├── pages/
 │   │   ├── exploratorio_carga.py
 │   │   ├── exploratorio_config.py
