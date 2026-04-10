@@ -225,16 +225,29 @@ def escribir_resultados_m1(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
     ws_mod["M10"].value = meta.get("meta_15", 0); ws_mod["M10"].number_format = fmt_num
 
     # Tablas Modelo
+    j_sum = 0
+    k_sum = 0
     for i, row in df_lben.iterrows():
         f = 16 + i
         for col_l, field in zip(["C", "D", "E", "F"], ["lben", "n_usados", "min_hist", "max_hist"]):
             c = ws_mod[f"{col_l}{f}"]
             c.value = row[field]; c.number_format = fmt_num if field != "n_usados" else "0"
+        
         ahorro_v = row['lben'] - row['min_hist']
         ws_mod[f"J{f}"].value = row['lben']; ws_mod[f"J{f}"].number_format = fmt_num
         ws_mod[f"K{f}"].value = row['min_hist']; ws_mod[f"K{f}"].number_format = fmt_num
         ws_mod[f"L{f}"].value = ahorro_v; ws_mod[f"L{f}"].number_format = fmt_num
         if row['lben'] > 0: ws_mod[f"M{f}"].value = ahorro_v / row['lben']; ws_mod[f"M{f}"].number_format = "0.0%"
+        
+        j_sum += row['lben']
+        k_sum += row['min_hist']
+    
+    # Fila 28: Totales Anuales
+    ws_mod["J28"].value = j_sum; ws_mod["J28"].number_format = fmt_num
+    ws_mod["K28"].value = k_sum; ws_mod["K28"].number_format = fmt_num
+    ws_mod["L28"].value = j_sum - k_sum; ws_mod["L28"].number_format = fmt_num
+    if j_sum > 0:
+        ws_mod["M28"].value = (j_sum - k_sum) / j_sum; ws_mod["M28"].number_format = "0.0%"
     
     # Informe de Datos Excluidos (B35:D35)
     if df_excluidos is not None and not df_excluidos.empty:
