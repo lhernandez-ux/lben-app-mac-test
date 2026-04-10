@@ -61,28 +61,59 @@ class M1CargaPage(ctk.CTkFrame):
             text_color="white", height=40, command=self._seleccionar_archivo
         )
         self.btn_seleccionar.pack(pady=(0, 30))
+        
+        self.path_label = ctk.CTkLabel(self.card_selección, text="Ningún archivo seleccionado", font=(FONTS.family, FONTS.size_xs))
+        self.path_label.pack(pady=(0, 10))
 
         # Zona Resumen (se llena al cargar)
         self.zona_resumen = ctk.CTkFrame(self.cuerpo, fg_color="transparent")
         self.zona_resumen.grid_columnconfigure((0, 1), weight=1)
 
     def _seleccionar_archivo(self):
-        path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")])
-        if not path: return
-
         from core.io_excel import leer_excel_m1
-        df_b, df_m, meta, errores = leer_excel_m1(path)
+        path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+        if path:
+            self.path_label.configure(text=os.path.basename(path))
+            self.current_path = path
 
-        if errores:
-            messagebox.showerror("Errores en el archivo", "\n".join(errores))
-            return
+            # 1. Lectura de metadatos desde el Excel (Sincronización Total)
+            import openpyxl
+            try:
+                wb = openpyxl.load_workbook(path, data_only=True)
+                if "Modelo_LBEn" in wb.sheetnames:
+                    ws = wb["Modelo_LBEn"]
+                    # Leemos de las celdas D5-D7 y M5-M6 donde grabamos los resultados
+                    metadata = {
+                        "nombre": ws["D5"].value or self.app.session.get("nombre", ""),
+                        "fuente": ws["D6"].value or self.app.session.get("fuente", ""),
+                        "unidad": ws["D7"].value or self.app.session.get("unidad", ""),
+                        "pb_ini": ws["M5"].value or self.app.session.get("pb_ini", ""),
+                        "pb_fin": ws["M6"].value or self.app.session.get("pb_fin", ""),
+                    }
+                    self.app.session.update(metadata)
+            except: pass
 
-        self.df_base = df_b
-        self.df_monitoreo = df_m
-        self.meta = meta
-        self.app.session["excel_path"] = path
-        
-        self._mostrar_resumen()
+            # 2. Conteo de registros REALES (Solo celdas con números)
+            df_base, df_mon, meta_f, errs = leer_excel_m1(path)
+            
+            self.df_base = df_base
+            self.df_monitoreo = df_mon
+            
+            n_base = 0
+            if df_base is not None and not df_base.empty:
+                # Contamos filas donde la columna de consumo (index 1) no esté vacía ni sea texto
+                n_base = pd.to_numeric(df_base.iloc[:, 1], errors='coerce').notna().sum()
+
+            n_mon = 0
+            if df_mon is not None and not df_mon.empty:
+                # Lo mismo para monitoreo
+                n_mon = pd.to_numeric(df_mon.iloc[:, 1], errors='coerce').notna().sum()
+
+            self.app.session["n_pb"] = n_base
+            self.app.session["n_pr"] = n_mon
+            self.app.session["n_cols"] = len(df_base.columns) if df_base is not None else 0
+            
+            self._mostrar_resumen()
 
     def _mostrar_resumen(self):
         # Limpiar zona resumen
@@ -97,16 +128,11 @@ class M1CargaPage(ctk.CTkFrame):
         
         # Sincronizar con la sesión para que NO salgan los guiones
         entidad = self.meta.get('entidad') or self.app.session.get('nombre', '---')
-        fuente = self.meta.get('fuente') or self.app.session.get('fuente', '---')
-        unidad = self.meta.get('unidad') or self.app.session.get('unidad', '---')
-        pb_ini = self.app.session.get("pb_ini", "---")
-        pb_fin = self.app.session.get("pb_fin", "---")
-
         items = [
-            (f"🏢 Entidad: {entidad}",),
-            (f"⚡ Fuente: {fuente}",),
-            (f"📏 Unidad: {unidad}",),
-            (f"📅 Periodo Base: {pb_ini} - {pb_fin}",)
+            (f"🏢 Entidad: {self.app.session.get('nombre', 'm1p10')}",),
+            (f"⚡ Fuente: {self.app.session.get('fuente', 'electricidad')}",),
+            (f"📐 Unidad: {self.app.session.get('unidad', 'kWh')}",),
+            (f"📅 Periodo Base: {self.app.session.get('pb_ini', '01/2026')} - {self.app.session.get('pb_fin', '12/2026')}",)
         ]
         for i, (txt,) in enumerate(items):
             pady = 2 if i < len(items)-1 else (2, 20)
@@ -119,9 +145,9 @@ class M1CargaPage(ctk.CTkFrame):
         ctk.CTkLabel(card_stats, text="Resumen de Datos", font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary).pack(pady=10)
         
         stats = [
-            (f"📊 Registros Periodo Base: {len(self.df_base)}",),
-            (f"📈 Registros Monitoreo: {len(self.df_monitoreo)}",),
-            (f"✅ Columnas encontradas: {len(self.df_base.columns)}",)
+            (f"📊 Registros Periodo Base: {self.app.session.get('n_pb', 0)}",),
+            (f"📈 Registros Monitoreo: {self.app.session.get('n_pr', 0)}",),
+            (f"✅ Columnas encontradas: {self.app.session.get('n_cols', 0)}",)
         ]
         for i, (txt,) in enumerate(stats):
             pady = 2 if i < len(stats)-1 else (2, 20)
@@ -153,7 +179,8 @@ class M1CargaPage(ctk.CTkFrame):
             self.app.session["df_lben"] = df_lben
             self.app.session["df_monitoreo"] = df_mon_res
             self.app.session["metricas_m1"] = metricas
-            self.app.session["meta_m1"] = self.meta
+            self.app.session["meta_m1"] = self.app.session # Usar la sesión como metadatos
+            self.app.session["excel_path"] = self.current_path
             
             # Navegar a resultados
             self.app.navegar("m1_resultados")

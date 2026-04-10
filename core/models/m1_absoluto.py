@@ -126,7 +126,14 @@ def procesar_m1(df_base: pd.DataFrame, df_monitoreo: pd.DataFrame = None):
         dfm = df_monitoreo.copy()
         cols_m = dfm.columns
         
-        dfm['Cons_Num'] = pd.to_numeric(dfm[cols_m[1]], errors='coerce').fillna(0)
+        # 3.1 Limpieza y Normalización Monitoreo
+        dfm['Cons_Num'] = pd.to_numeric(dfm[cols_m[1]], errors='coerce')
+        # EL ESCUDO: Solo procesar filas que tengan un valor de consumo (ignorar vacíos hasta 2050)
+        dfm = dfm[dfm['Cons_Num'].notna()].copy()
+        
+        if dfm.empty:
+            return df_lben, None, dfb, df_excluidos
+            
         dfm['Dias_Num'] = pd.to_numeric(dfm[cols_m[2]], errors='coerce').fillna(30)
         dfm['Normalizado'] = (dfm['Cons_Num'] / dfm['Dias_Num']) * 30
         

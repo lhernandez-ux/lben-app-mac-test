@@ -86,8 +86,15 @@ class M1ConfigPage(ctk.CTkFrame):
 
         # 3. Periodo de Reporte
         self._seccion_label(card, "Periodo de Reporte (Seguimiento)", row=6)
-        # _date_range_picker usa row y row+1 (7 y 8)
-        self.sel_pr_ini, self.sel_pr_fin, self.lbl_resumen_pr = self._date_range_picker(card, 7)
+        # Solo necesitamos fecha de inicio de seguimiento
+        f_mon = ctk.CTkFrame(card, fg_color="transparent")
+        f_mon.grid(row=7, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 4))
+        self.sel_pr_ini = SelectorFecha(f_mon, label_text="Fecha Inicio de Seguimiento", command=self._actualizar_todos_los_resumenes)
+        self.sel_pr_ini.grid(row=0, column=0, sticky="ew")
+
+        lbl_h = ctk.CTkLabel(card, text="✓ La plantilla se generará automáticamente hasta Diciembre 2050", 
+                             font=(FONTS.family, FONTS.size_xs, "italic"), text_color=COLORS.success)
+        lbl_h.grid(row=8, column=0, sticky="w", padx=DIMS.padding_card, pady=(0, 16))
 
         # Inicializar resúmenes
         self._actualizar_todos_los_resumenes()
@@ -159,7 +166,7 @@ class M1ConfigPage(ctk.CTkFrame):
             "pb_ini": self.sel_pb_ini.get_value(),
             "pb_fin": self.sel_pb_fin.get_value(),
             "pr_ini": self.sel_pr_ini.get_value(),
-            "pr_fin": self.sel_pr_fin.get_value(),
+            "pr_fin": "12/2050",
         }
 
         # Guardar en sesión
@@ -171,12 +178,9 @@ class M1ConfigPage(ctk.CTkFrame):
             messagebox.showwarning("Campos faltantes", "Por favor completa la identificación del proyecto.")
             return
 
-        # Validar lógica de rangos
+        # Validar lógica de rangos (solo para periodo base)
         if not self._validar_rango(data["pb_ini"], data["pb_fin"]):
             messagebox.showerror("Rango inválido", "En Periodo Base, la fecha fin debe ser posterior a inicio.")
-            return
-        if not self._validar_rango(data["pr_ini"], data["pr_fin"]):
-            messagebox.showerror("Rango inválido", "En Periodo Reporte, la fecha fin debe ser posterior a inicio.")
             return
 
         # Guardar en sesión
@@ -187,8 +191,14 @@ class M1ConfigPage(ctk.CTkFrame):
             pass
 
     def _actualizar_todos_los_resumenes(self):
+        # Establecer defaults si es la primera vez (cuando los combos están en año actual)
+        current_year = str(datetime.now().year)
+        if self.sel_pb_ini.combo_anio.get() == current_year:
+            self.sel_pb_ini.set_value("01/2020")
+            self.sel_pb_fin.set_value("12/2020")
+            self.sel_pr_ini.set_value("01/2021")
+
         self._actualizar_etiqueta_rango(self.sel_pb_ini, self.sel_pb_fin, self.lbl_resumen_pb)
-        self._actualizar_etiqueta_rango(self.sel_pr_ini, self.sel_pr_fin, self.lbl_resumen_pr)
 
     def _actualizar_etiqueta_rango(self, sel_ini, sel_fin, lbl):
         f1 = sel_ini.get_value()

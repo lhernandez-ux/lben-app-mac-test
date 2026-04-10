@@ -13,7 +13,7 @@ class SelectorFecha(ctk.CTkFrame):
     Componente para seleccionar Mes y Año mediante menús desplegables.
     Retorna la fecha en formato MM/AAAA.
     """
-    def __init__(self, master, label_text="Fecha", start_year=2015, end_year=2040, command=None, **kwargs):
+    def __init__(self, master, label_text="Fecha", start_year=2015, end_year=2030, command=None, **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
         
         self.command = command
