@@ -8,6 +8,9 @@ y Seguimiento Triple Meta con CUSUM con reinicio anual.
 
 import pandas as pd
 import numpy as np
+
+# Silenciar avisos de futuras versiones para mantener terminal limpia
+pd.set_option('future.no_silent_downcasting', True)
 import warnings
 
 def procesar_m1(df_base: pd.DataFrame, df_monitoreo: pd.DataFrame = None):

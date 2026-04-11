@@ -11,6 +11,7 @@ statsmodels>=0.14.0
 
 # Gráficos
 matplotlib>=3.7.0
+plotly>=5.15.0
 
 # Excel
 openpyxl>=3.1.0

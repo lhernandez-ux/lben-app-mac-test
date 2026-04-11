@@ -69,7 +69,7 @@ class M1CargaPage(ctk.CTkFrame):
         self.current_path = path
         self.lbl_path.configure(text=os.path.basename(path))
 
-        # 1. Sincronización de Metadatos (ADN del Proyecto)
+        # 1. Sincronización de Metadatos (Nombre, Fuente, Unidad)
         import openpyxl
         try:
             wb = openpyxl.load_workbook(path, data_only=True)
@@ -80,22 +80,23 @@ class M1CargaPage(ctk.CTkFrame):
                     "nombre": ws["D5"].value or self.app.session.get("nombre", ""),
                     "fuente": ws["D6"].value or self.app.session.get("fuente", ""),
                     "unidad": ws["D7"].value or self.app.session.get("unidad", ""),
-                    "pb_ini": ws["M5"].value or self.app.session.get("pb_ini", ""),
-                    "pb_fin": ws["M6"].value or self.app.session.get("pb_fin", ""),
                 })
         except: pass
 
-        # 2. Lectura y Conteo Real
+        # 2. Lectura y Conteo Real (Extraer fechas de la tabla)
         df_b, df_m, _, _ = leer_excel_m1(path)
         self.df_base = df_b
         self.df_monitoreo = df_m
 
-        if df_b is not None:
+        if df_b is not None and not df_b.empty:
             n_pb = pd.to_numeric(df_b.iloc[:,1], errors='coerce').notna().sum()
             self.app.session["n_pb"] = n_pb
             self.app.session["n_cols"] = len(df_b.columns)
+            # EXTRACCIÓN INFALIBLE: Directo de la columna Fecha de la tabla
+            self.app.session["pb_ini"] = str(df_b["Fecha"].iloc[0])
+            self.app.session["pb_fin"] = str(df_b["Fecha"].iloc[-1])
         
-        if df_m is not None:
+        if df_m is not None and not df_m.empty:
             n_pr = pd.to_numeric(df_m.iloc[:,1], errors='coerce').notna().sum()
             self.app.session["n_pr"] = n_pr
 
@@ -138,9 +139,16 @@ class M1CargaPage(ctk.CTkFrame):
 
         # Botón Calcular (debajo de la tarjeta)
         ctk.CTkButton(self.zona_resumen, text="⚙️ Calcular Línea Base y Desempeño", font=(FONTS.family, FONTS.size_md, "bold"),
-                      fg_color=COLORS.accent, text_color=COLORS.primary, height=48, command=self._procesar).grid(row=1, column=0, pady=30)
+                      fg_color=COLORS.accent, text_color=COLORS.primary, height=48, command=self._procesar).grid(row=2, column=0, pady=30)
 
     def _procesar(self):
+        n_pb = self.app.session.get("n_pb", 0)
+        if n_pb == 0:
+            messagebox.showerror("Sin datos", "No hay datos en el Periodo Base.")
+            return
+        if n_pb < 12:
+            if not messagebox.askyesno("Aviso", "Menos de 12 meses. ¿Continuar?"): return
+
         if self.df_base is None: return
         try:
             df_lben, df_mon, df_bf, df_exc = procesar_m1(self.df_base, self.df_monitoreo)
