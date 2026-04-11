@@ -33,6 +33,8 @@ class M1ResultadosPage(ctk.CTkFrame):
             "nombre": self.app.session.get("nombre", "Proyecto sin nombre"),
             "fuente": self.app.session.get("fuente", "N/A"),
             "unidad": self.app.session.get("unidad", "kWh"),
+            "zona": self.app.session.get("zona", "N/A"),
+            "area": self.app.session.get("area", "No disponible"),
             "pb_ini": self.app.session.get("pb_ini"),
             "pb_fin": self.app.session.get("pb_fin")
         }
@@ -123,7 +125,9 @@ class M1ResultadosPage(ctk.CTkFrame):
         self._tabla_simple(scroll, "IDENTIFICACIÓN DEL PROYECTO", [
             ("Nombre Edificio / Entidad", self.config['nombre']),
             ("Fuente de Energía", self.config['fuente']),
-            ("Unidad de Energía", self.config['unidad'])
+            ("Unidad de Energía", self.config['unidad']),
+            ("Zona Climática", self.config['zona']),
+            ("Área útil (m2)", self.config['area'])
         ])
 
         # 2. Tabla Métricas Modelo

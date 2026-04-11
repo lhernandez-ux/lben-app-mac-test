@@ -81,9 +81,6 @@ class ExploratorioCargaPage(ctk.CTkFrame):
         cuerpo.grid_columnconfigure(0, weight=1)
         cuerpo.grid_rowconfigure(1, weight=1)
 
-        # ── Banner de sesión ──────────────────────────────────────────────────
-        self._build_banner_sesion(cuerpo)
-
         # ── Card de carga ─────────────────────────────────────────────────────
         card = ctk.CTkFrame(
             cuerpo,
@@ -171,41 +168,6 @@ class ExploratorioCargaPage(ctk.CTkFrame):
             padx=48, pady=(0, 32),
             sticky="w"
         )
-
-    def _build_banner_sesion(self, parent):
-        """Muestra los parámetros de la sesión actual si existen."""
-        sesion = self.app.session
-        nombre   = sesion.get("proyecto_nombre", "")
-        var_dep  = sesion.get("var_dependiente", "")
-        f_ini    = sesion.get("fecha_inicio", "")
-        f_fin    = sesion.get("fecha_fin", "")
-
-        if not nombre and not var_dep:
-            return
-
-        banner = ctk.CTkFrame(
-            parent,
-            fg_color="#E8F5E9",
-            corner_radius=8,
-            border_width=1,
-            border_color="#A5D6A7"
-        )
-        banner.grid(row=0, column=0, padx=48, pady=(20, 0), sticky="ew")
-
-        texto = []
-        if nombre:
-            texto.append(f"Proyecto: {nombre}")
-        if var_dep:
-            texto.append(f"Consumo: {var_dep}")
-        if f_ini and f_fin:
-            texto.append(f"Período: {f_ini} — {f_fin}")
-
-        ctk.CTkLabel(
-            banner,
-            text="  |  ".join(texto),
-            font=(FONTS.family, FONTS.size_sm),
-            text_color=COLORS.success
-        ).pack(padx=16, pady=10)
 
     # ── Lógica ────────────────────────────────────────────────────────────────
     def _seleccionar_archivo(self):

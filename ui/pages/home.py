@@ -42,6 +42,13 @@ class HomePage(ctk.CTkFrame):
         cnt = ctk.CTkFrame(sidebar, fg_color="transparent")
         cnt.pack(fill="x")
 
+        # Título arriba del logo
+        ctk.CTkLabel(
+            cnt, text="Línea Base Energética\npara Edificios",
+            font=(FONTS.family, FONTS.size_lg, "bold"),
+            text_color=COLORS.text_white, justify="center"
+        ).pack(pady=(0, 20))
+
         # Logo
         logo_path = os.path.join("assets", "logo_lben.png")
         if os.path.exists(logo_path):
@@ -52,17 +59,11 @@ class HomePage(ctk.CTkFrame):
         else:
             ctk.CTkLabel(cnt, text="⚡", font=(FONTS.family, 42), text_color=COLORS.accent).pack(pady=(0, 20))
 
-        # Textos
-        ctk.CTkLabel(
-            cnt, text="Línea Base\nEnergética",
-            font=(FONTS.family, FONTS.size_lg, "bold"),
-            text_color=COLORS.text_white, justify="center"
-        ).pack(pady=(0, 4))
-
+        # Resolución debajo del logo
         ctk.CTkLabel(
             cnt, text="Resolución UPME\n016 de 2024",
-            font=(FONTS.family, FONTS.size_xs),
-            text_color="#7A9B8E", justify="center"
+            font=(FONTS.family, FONTS.size_md, "bold"),
+            text_color=COLORS.text_white, justify="center"
         ).pack(pady=(0, 24))
 
         # Separador

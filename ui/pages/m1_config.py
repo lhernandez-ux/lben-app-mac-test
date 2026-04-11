@@ -78,6 +78,11 @@ class M1ConfigPage(ctk.CTkFrame):
 
         self.entry_fuente = self._entry_with_label(fuente_frame, "Fuente de Energía", "Ej: Electricidad", 0, 0)
         self.entry_unidad = self._entry_with_label(fuente_frame, "Unidad de Medida", "Ej: kWh", 0, 1)
+        
+        # Nuevos campos Resolución 016
+        self.sel_zona = self._option_menu_with_label(fuente_frame, "Zona Climática", ["Cálida", "Templada", "Fría"], 1, 0)
+        self.entry_area = self._entry_with_label(fuente_frame, "Área útil (m2)", "No disponible", 1, 1)
+        self.entry_area.insert(0, "No disponible") # Valor por defecto
 
         # 2. Periodo Base
         self._seccion_label(card, "Periodo Base (Histórico)", row=3)
@@ -128,12 +133,22 @@ class M1ConfigPage(ctk.CTkFrame):
 
     def _entry_with_label(self, parent, label, placeholder, row, col):
         f = ctk.CTkFrame(parent, fg_color="transparent")
-        f.grid(row=row, column=col, sticky="ew", padx=4 if col==0 else (4,0))
+        f.grid(row=row, column=col, sticky="ew", padx=4 if col==0 else (4,0), pady=(0, 16))
         f.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(f, text=label, font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary).grid(row=0, column=0, sticky="w")
         e = ctk.CTkEntry(f, placeholder_text=placeholder, height=38, corner_radius=8, fg_color=COLORS.bg_main, border_color=COLORS.border)
         e.grid(row=1, column=0, sticky="ew")
         return e
+
+    def _option_menu_with_label(self, parent, label, options, row, col):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=col, sticky="ew", padx=4 if col==0 else (4,0), pady=(0, 16))
+        f.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(f, text=label, font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary).grid(row=0, column=0, sticky="w")
+        m = ctk.CTkOptionMenu(f, values=options, height=38, corner_radius=8, fg_color=COLORS.bg_main,
+                              button_color=COLORS.primary, button_hover_color=COLORS.accent, text_color=COLORS.primary, dropdown_fg_color=COLORS.bg_card)
+        m.grid(row=1, column=0, sticky="ew")
+        return m
 
     def _guardar_y_cargar(self):
         # Guardar estado actual antes de navegar
@@ -163,6 +178,8 @@ class M1ConfigPage(ctk.CTkFrame):
             "nombre": self.entry_nombre.get().strip(),
             "fuente": self.entry_fuente.get().strip(),
             "unidad": self.entry_unidad.get().strip(),
+            "zona": self.sel_zona.get(),
+            "area": self.entry_area.get().strip() or "No disponible",
             "pb_ini": self.sel_pb_ini.get_value(),
             "pb_fin": self.sel_pb_fin.get_value(),
             "pr_ini": self.sel_pr_ini.get_value(),

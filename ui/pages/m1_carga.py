@@ -80,6 +80,8 @@ class M1CargaPage(ctk.CTkFrame):
                     "nombre": ws["D5"].value or self.app.session.get("nombre", ""),
                     "fuente": ws["D6"].value or self.app.session.get("fuente", ""),
                     "unidad": ws["D7"].value or self.app.session.get("unidad", ""),
+                    "zona": ws["D8"].value or self.app.session.get("zona", ""),
+                    "area": ws["D9"].value or self.app.session.get("area", "No disponible"),
                 })
         except: pass
 
@@ -121,6 +123,8 @@ class M1CargaPage(ctk.CTkFrame):
             (f"🏢 Entidad: {self.app.session.get('nombre', '---')}",),
             (f"⚡ Fuente: {self.app.session.get('fuente', '---')}",),
             (f"📐 Unidad: {self.app.session.get('unidad', '---')}",),
+            (f"🌍 Zona: {self.app.session.get('zona', '---')}",),
+            (f"📏 Área Útil: {self.app.session.get('area', '---')}",),
             (f"📅 Periodo Base: {self.app.session.get('pb_ini', '---')} - {self.app.session.get('pb_fin', '---')}",)
         ]
         for txt, in items:

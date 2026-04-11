@@ -75,6 +75,8 @@ def _escribir_m1_identificacion(wb, data):
     ws["D5"] = data["nombre"]
     ws["D6"] = data["fuente"]
     ws["D7"] = data["unidad"]
+    ws["D8"] = data.get("zona")
+    ws["D9"] = data.get("area", "No disponible")
 
 def _escribir_m1_periodo_base(wb, data):
     ws = wb["Período_Base"]
@@ -164,7 +166,13 @@ def leer_excel_m1(path):
     df_b = _leer_hoja_datos_m1(wb["Período_Base"])
     df_m = _leer_hoja_datos_m1(wb["Monitoreo"])
     ws_mod = wb["Modelo_LBEn"] 
-    meta = {"entidad": ws_mod["D5"].value, "fuente": ws_mod["D6"].value, "unidad": ws_mod["D7"].value}
+    meta = {
+        "entidad": ws_mod["D5"].value, 
+        "fuente": ws_mod["D6"].value, 
+        "unidad": ws_mod["D7"].value,
+        "zona": ws_mod["D8"].value,
+        "area": ws_mod["D9"].value
+    }
     return df_b, df_m, meta, []
 
 def _leer_hoja_datos_m1(ws):
@@ -213,7 +221,11 @@ def escribir_resultados_m1(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
 
     # 2. Hoja Modelo_LBEn: Ficha Técnica (K5:M10)
     ws_mod = wb["Modelo_LBEn"]
-    ws_mod["D5"] = config.get("nombre"); ws_mod["D6"] = config.get("fuente"); ws_mod["D7"] = config.get("unidad")
+    ws_mod["D5"] = config.get("nombre")
+    ws_mod["D6"] = config.get("fuente")
+    ws_mod["D7"] = config.get("unidad")
+    ws_mod["D8"] = config.get("zona")
+    ws_mod["D9"] = config.get("area", "No disponible")
     ws_mod["K5"] = "M1 (Consumo Absoluto)"
     ws_mod["K6"] = meta.get("n_inicial"); ws_mod["K7"] = meta.get("n_filt_est"); ws_mod["K8"] = meta.get("n_filt_man"); ws_mod["K9"] = meta.get("n_final")
     ws_mod["K10"].value = meta.get("fiabilidad"); ws_mod["K10"].number_format = "0.0%"
