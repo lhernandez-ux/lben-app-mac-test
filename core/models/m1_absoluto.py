@@ -210,11 +210,11 @@ def calcular_resumen_metricas(df_lben, df_base_raw):
     return {
         "consumo_promedio_anual": consumo_anual,
         "potencial_ahorro_kwh": ahorro_anual,
-        "potencial_ahorro_pct": ahorro_anual / consumo_anual if consumo_anual > 0 else 0,
+        "potencial_ahorro_pct": (ahorro_anual / consumo_anual * 100) if consumo_anual > 0 else 0,
         "n_inicial": n_inicial,
         "n_filt_est": n_inicial - n_final - n_exch_man,
         "n_filt_man": n_exch_man,
         "n_final": n_final,
-        "fiabilidad": n_final / n_inicial if n_inicial > 0 else 0,
+        "fiabilidad": (n_final / n_inicial * 100) if n_inicial > 0 else 0,
         "meta_15": consumo_anual * 0.15
     }
