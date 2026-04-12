@@ -1,0 +1,209 @@
+"""
+ui/pages/m2_config.py
+=====================
+Pantalla de configuración para el Modelo M2: Cociente de Valores Medidos.
+Réplica exacta de la estética M1 con campos adicionales para Variable Relevante.
+"""
+
+import customtkinter as ctk
+from tkinter import messagebox
+from datetime import datetime
+from ui.theme import COLORS, FONTS, DIMS
+from ui.components import SelectorFecha
+from core.io_excel import generar_plantilla_m2
+
+class M2ConfigPage(ctk.CTkFrame):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, fg_color=COLORS.bg_main, **kwargs)
+        self.app = parent
+        self._build()
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        self._build_topbar()
+        self._build_cuerpo()
+
+    def _build_topbar(self):
+        topbar = ctk.CTkFrame(
+            self, fg_color=COLORS.bg_card,
+            corner_radius=0, height=DIMS.topbar_height
+        )
+        topbar.grid(row=0, column=0, sticky="ew")
+        topbar.grid_propagate(False)
+        topbar.grid_columnconfigure(1, weight=1)
+
+        # Línea de acento
+        ctk.CTkFrame(topbar, fg_color=COLORS.accent, height=2).place(relx=0, rely=1.0, relwidth=1.0, anchor="sw")
+
+        ctk.CTkButton(
+            topbar, text="← Inicio", font=(FONTS.family, FONTS.size_sm),
+            fg_color="transparent", text_color=COLORS.primary,
+            hover_color=COLORS.bg_main, width=90, height=32,
+            command=lambda: self.app.navegar("home")
+        ).grid(row=0, column=0, padx=16, pady=8, sticky="w")
+
+        ctk.CTkLabel(
+            topbar, text="Modelo M2: Cociente de Valores — Configuración",
+            font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.primary
+        ).grid(row=0, column=1, sticky="w", padx=8)
+
+        ctk.CTkButton(
+            topbar, text="🚀 Cargar datos existentes",
+            font=(FONTS.family, FONTS.size_sm), fg_color=COLORS.primary,
+            text_color=COLORS.text_white, height=32,
+            command=self._guardar_y_cargar
+        ).grid(row=0, column=2, padx=16, pady=8, sticky="e")
+
+    def _build_cuerpo(self):
+        scroll = ctk.CTkScrollableFrame(self, fg_color=COLORS.bg_main, corner_radius=0)
+        scroll.grid(row=1, column=0, sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
+
+        card = ctk.CTkFrame(
+            scroll, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius,
+            border_width=1, border_color=COLORS.border
+        )
+        card.grid(row=0, column=0, padx=48, pady=24, sticky="ew")
+        card.grid_columnconfigure(0, weight=1)
+
+        pad = {"padx": DIMS.padding_card, "pady": (0, 16)}
+
+        # 1. Identificación
+        self._seccion_label(card, "Identificación del Proyecto")
+        self.entry_nombre = self._entry(card, "Nombre de la Entidad / Edificio / Proceso", row=1)
+        
+        # Grid para parámetros secundarios
+        info_frame = ctk.CTkFrame(card, fg_color="transparent")
+        info_frame.grid(row=2, column=0, sticky="ew", **pad)
+        info_frame.grid_columnconfigure((0, 1), weight=1)
+
+        self.entry_fuente = self._entry_with_label(info_frame, "Fuente de Energía", "Ej: Electricidad", 0, 0)
+        self.entry_unidad = self._entry_with_label(info_frame, "Unidad de Medida", "Ej: kWh", 0, 1)
+        self.sel_zona = self._option_menu_with_label(info_frame, "Zona Climática", ["Cálida", "Templada", "Fría"], 1, 0)
+        self.entry_area = self._entry_with_label(info_frame, "Área útil (m2)", "No disponible", 1, 1)
+        self.entry_area.insert(0, "No disponible")
+
+        # 2. NUEVOS CAMPOS M2: Variable Relevante
+        self._seccion_label(card, "Variable Relevante (Denominador)", row=3)
+        var_frame = ctk.CTkFrame(card, fg_color="transparent")
+        var_frame.grid(row=4, column=0, sticky="ew", **pad)
+        var_frame.grid_columnconfigure((0, 1), weight=1)
+
+        self.entry_var_nom = self._entry_with_label(var_frame, "Nombre de la Variable", "Ej: Ocupantes / Área", 0, 0)
+        self.entry_var_uni = self._entry_with_label(var_frame, "Unidad de la Variable", "Ej: Pers/mes / m2", 0, 1)
+
+        # 3. Periodo Base
+        self._seccion_label(card, "Periodo Base (Histórico)", row=5)
+        self.sel_pb_ini, self.sel_pb_fin, self.lbl_resumen_pb = self._date_range_picker(card, 6)
+
+        # 4. Periodo de Reporte
+        self._seccion_label(card, "Periodo de Reporte (Seguimiento)", row=8)
+        f_mon = ctk.CTkFrame(card, fg_color="transparent")
+        f_mon.grid(row=9, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 4))
+        self.sel_pr_ini = SelectorFecha(f_mon, label_text="Fecha Inicio de Seguimiento", command=self._actualizar_todos_los_resumenes)
+        self.sel_pr_ini.grid(row=0, column=0, sticky="ew")
+
+        ctk.CTkLabel(card, text="✓ La plantilla se generará automáticamente hasta Diciembre 2050", 
+                     font=(FONTS.family, FONTS.size_xs, "italic"), text_color=COLORS.success).grid(row=10, column=0, sticky="w", padx=DIMS.padding_card, pady=(0, 16))
+
+        self._actualizar_todos_los_resumenes()
+        self._build_botones(scroll)
+
+    def _build_botones(self, parent):
+        btn_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        btn_frame.grid(row=1, column=0, sticky="ew", padx=48, pady=(0, 32))
+
+        ctk.CTkButton(
+            btn_frame, text="📥  Confirmar y descargar plantilla M2",
+            font=(FONTS.family, FONTS.size_md, "bold"),
+            fg_color=COLORS.accent, text_color=COLORS.primary,
+            height=44, command=self._confirmar_y_descargar
+        ).pack(side="left")
+
+    # --- Helpers Visuales del ADN LBEn ---
+    def _seccion_label(self, parent, texto, row=0):
+        ctk.CTkLabel(
+            parent, text=texto, font=(FONTS.family, FONTS.size_sm, "bold"),
+            text_color=COLORS.primary, anchor="w"
+        ).grid(row=row, column=0, sticky="w", padx=DIMS.padding_card, pady=(16, 4))
+
+    def _entry(self, parent, placeholder, row):
+        e = ctk.CTkEntry(parent, placeholder_text=placeholder, font=(FONTS.family, FONTS.size_sm),
+                         fg_color=COLORS.bg_main, border_color=COLORS.border, height=38, corner_radius=8)
+        e.grid(row=row, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 16))
+        return e
+
+    def _entry_with_label(self, parent, label, placeholder, row, col):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=col, sticky="ew", padx=4 if col==0 else (4,0), pady=(0, 16))
+        f.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(f, text=label, font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary).grid(row=0, column=0, sticky="w")
+        e = ctk.CTkEntry(f, placeholder_text=placeholder, height=38, corner_radius=8, fg_color=COLORS.bg_main, border_color=COLORS.border)
+        e.grid(row=1, column=0, sticky="ew")
+        return e
+
+    def _option_menu_with_label(self, parent, label, options, row, col):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=col, sticky="ew", padx=4 if col==0 else (4,0), pady=(0, 16))
+        f.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(f, text=label, font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary).grid(row=0, column=0, sticky="w")
+        m = ctk.CTkOptionMenu(f, values=options, height=38, corner_radius=8, fg_color=COLORS.bg_main,
+                               button_color=COLORS.primary, button_hover_color=COLORS.accent, text_color=COLORS.primary, dropdown_fg_color=COLORS.bg_card)
+        m.grid(row=1, column=0, sticky="ew")
+        return m
+
+    def _date_range_picker(self, parent, row):
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=0, sticky="ew", padx=DIMS.padding_card, pady=(0, 4))
+        f.grid_columnconfigure((0, 1), weight=1)
+        sel_ini = SelectorFecha(f, label_text="Fecha Inicio", command=self._actualizar_todos_los_resumenes)
+        sel_ini.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        sel_fin = SelectorFecha(f, label_text="Fecha Fin", command=self._actualizar_todos_los_resumenes)
+        sel_fin.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+        lbl = ctk.CTkLabel(parent, text="", font=(FONTS.family, FONTS.size_xs, "italic"), text_color=COLORS.success, anchor="w")
+        lbl.grid(row=row+1, column=0, sticky="w", padx=DIMS.padding_card, pady=(0, 16))
+        return sel_ini, sel_fin, lbl
+
+    def _guardar_y_cargar(self):
+        self._confirmar_y_descargar(auto=True)
+        self.app.navegar("m2_carga")
+
+    def _confirmar_y_descargar(self, auto=False):
+        data = {
+            "nombre": self.entry_nombre.get().strip(),
+            "fuente": self.entry_fuente.get().strip(),
+            "unidad": self.entry_unidad.get().strip(),
+            "zona": self.sel_zona.get(),
+            "area": self.entry_area.get().strip() or "No disponible",
+            "var_relevante_nom": self.entry_var_nom.get().strip() or "Variable Relevante",
+            "var_relevante_uni": self.entry_var_uni.get().strip() or "Unid/mes",
+            "pb_ini": self.sel_pb_ini.get_value(),
+            "pb_fin": self.sel_pb_fin.get_value(),
+            "pr_ini": self.sel_pr_ini.get_value(),
+            "pr_fin": "12/2050",
+        }
+        self.app.session.update(data)
+        if auto: return
+        if not data["nombre"] or not data["fuente"] or not data["unidad"]:
+            messagebox.showwarning("Campos faltantes", "Por favor completa la identificación del proyecto.")
+            return
+        if generar_plantilla_m2(data):
+            pass
+
+    def _actualizar_todos_los_resumenes(self):
+        current_year = str(datetime.now().year)
+        if self.sel_pb_ini.combo_anio.get() == current_year:
+            self.sel_pb_ini.set_value("01/2020"); self.sel_pb_fin.set_value("12/2020"); self.sel_pr_ini.set_value("01/2021")
+        self._actualizar_etiqueta_rango(self.sel_pb_ini, self.sel_pb_fin, self.lbl_resumen_pb)
+
+    def _actualizar_etiqueta_rango(self, sel_ini, sel_fin, lbl):
+        f1, f2 = sel_ini.get_value(), sel_fin.get_value()
+        try:
+            d1, d2 = datetime.strptime(f1, "%m/%Y"), datetime.strptime(f2, "%m/%Y")
+            meses = (d2.year - d1.year) * 12 + (d2.month - d1.month) + 1
+            meses_abr = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+            f1_txt, f2_txt = f"{meses_abr[d1.month-1]}-{d1.year}", f"{meses_abr[d2.month-1]}-{d2.year}"
+            if meses > 0: lbl.configure(text=f"✓ {f1_txt} → {f2_txt} ({meses} meses)", text_color=COLORS.success)
+            else: lbl.configure(text="✕ Rango inválido", text_color=COLORS.danger)
+        except: pass

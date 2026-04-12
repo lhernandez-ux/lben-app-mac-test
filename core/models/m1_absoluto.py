@@ -112,10 +112,22 @@ def procesar_m1(df_base: pd.DataFrame, df_monitoreo: pd.DataFrame = None):
         for idx in outliers.index:
             excluidos_lista.append({'Fecha': dfb.loc[idx, cols_b[0]], 'Consumo': dfb.loc[idx, 'Consumo_Num'], 'Motivo': 'Estadístico'})
 
+        # Calcular límites estadísticos según Res. 016
+        if n_mes < 10:
+            l_inf = lben_mes * 0.9
+            l_sup = lben_mes * 1.1
+        else:
+            std_f = filtered.std() if n_final > 1 else 0
+            l_inf = lben_mes - 2 * std_f
+            l_sup = lben_mes + 2 * std_f
+
         resultados_lben.append({
-            'mes': meses_nombres[m_idx], 'lben': lben_mes, 'n_usados': n_final, 'n_ini': n_mes,
-            'lim_inf': lben_mes - (filtered.std()*2 if n_final > 1 else lben_mes*0.1),
-            'lim_sup': lben_mes + (filtered.std()*2 if n_final > 1 else lben_mes*0.1),
+            'mes': meses_nombres[m_idx], 
+            'lben': lben_mes, 
+            'n_usados': n_final, 
+            'n_ini': n_mes,
+            'lim_inf': l_inf,
+            'lim_sup': l_sup,
             'min_hist': filtered.min() if n_final > 0 else 0,
             'max_hist': filtered.max() if n_final > 0 else 0
         })

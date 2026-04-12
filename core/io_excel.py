@@ -19,6 +19,7 @@ from openpyxl.utils import get_column_letter
 # ── Ruta a la plantilla base ──────────────────────────────────────────────────
 _DIR_DATA = os.path.join(os.path.dirname(__file__), "..", "data")
 _PLANTILLA_M1 = os.path.join(_DIR_DATA, "Plantilla_LBEn_M1_modelo.xlsx")
+_PLANTILLA_M2 = os.path.join(_DIR_DATA, "Plantilla_LBEn_M2_modelo.xlsx")
 _PLANTILLA_EXPLORATORIA = os.path.join(_DIR_DATA, "plantilla_exploracion_modelo.xlsx")
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -68,6 +69,28 @@ def generar_plantilla_m1(data: dict) -> bool:
         messagebox.showerror("Error", f"Error al generar: {e}")
         return False
 
+def generar_plantilla_m2(data: dict) -> bool:
+    if not os.path.exists(_PLANTILLA_M2):
+        messagebox.showerror("Error", f"No se encontró la plantilla M2 en:\n{_PLANTILLA_M2}")
+        return False
+
+    nombre_archivo = f"M2_{_limpiar_nombre(data['nombre'])}.xlsx"
+    ruta_destino = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=nombre_archivo, filetypes=[("Excel", "*.xlsx")])
+    if not ruta_destino: return False
+
+    try:
+        shutil.copy2(_PLANTILLA_M2, ruta_destino)
+        wb = load_workbook(ruta_destino)
+        _escribir_m2_identificacion(wb, data)
+        _escribir_m1_periodo_base(wb, data) # Mismo formato básico de fechas
+        _escribir_m1_monitoreo(wb, data)
+        wb.save(ruta_destino)
+        messagebox.showinfo("Éxito", f"Plantilla M2 generada en:\n{ruta_destino}")
+        return True
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al generar: {e}")
+        return False
+
 # ── Helpers Escritura Inicial ───────────────────────────────────────────────
 
 def _escribir_m1_identificacion(wb, data):
@@ -82,6 +105,16 @@ def _escribir_m1_periodo_base(wb, data):
     ws = wb["Período_Base"]
     fechas = _generar_fechas_mensuales(data["pb_ini"], data["pb_fin"])
     for i, f_str in enumerate(fechas): ws[f"B{8+i}"] = f_str
+
+def _escribir_m2_identificacion(wb, data):
+    ws = wb["Modelo_LBEn"]
+    ws["D5"] = data["nombre"]
+    ws["D6"] = data["fuente"]
+    ws["D7"] = data["unidad"]
+    ws["D8"] = data.get("zona")
+    ws["D9"] = data.get("area", "No disponible")
+    ws["D10"] = data.get("var_relevante_nom")
+    ws["D11"] = data.get("var_relevante_uni")
 
 def _escribir_m1_monitoreo(wb, data):
     ws = wb["Monitoreo"]
@@ -175,6 +208,27 @@ def leer_excel_m1(path):
     }
     return df_b, df_m, meta, []
 
+def leer_excel_m2(path):
+    errores = []
+    wb = load_workbook(path, data_only=True)
+    for s in ["Período_Base", "Monitoreo"]:
+        if s not in wb.sheetnames: errores.append(f"Falta hoja {s}")
+    if errores: return None, None, {}, errores
+
+    df_b = _leer_hoja_datos_m1(wb["Período_Base"])
+    df_m = _leer_hoja_datos_m1(wb["Monitoreo"])
+    ws_mod = wb["Modelo_LBEn"] 
+    meta = {
+        "entidad": ws_mod["D5"].value, 
+        "fuente": ws_mod["D6"].value, 
+        "unidad": ws_mod["D7"].value,
+        "zona": ws_mod["D8"].value,
+        "area": ws_mod["D9"].value,
+        "var_relevante_nom": ws_mod["D10"].value,
+        "var_relevante_uni": ws_mod["D11"].value
+    }
+    return df_b, df_m, meta, []
+
 def _leer_hoja_datos_m1(ws):
     headers = []
     for c in range(2, 11): # B a J (Usuario llena hasta J)
@@ -241,7 +295,7 @@ def escribir_resultados_m1(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
     k_sum = 0
     for i, row in df_lben.iterrows():
         f = 16 + i
-        for col_l, field in zip(["C", "D", "E", "F"], ["lben", "n_usados", "min_hist", "max_hist"]):
+        for col_l, field in zip(["C", "D", "E", "F"], ["lben", "n_usados", "lim_inf", "lim_sup"]):
             c = ws_mod[f"{col_l}{f}"]
             c.value = row[field]; c.number_format = fmt_num if field != "n_usados" else "0"
         
@@ -279,6 +333,106 @@ def escribir_resultados_m1(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
                 "O": "Desemp_kWh", "P": "Desemp_Pct", "Q": "CUSUM_kWh",
                 "R": "Avance_Pot", "S": "Avance_15",
                 "T": "Desemp_COP", "U": "CUSUM_COP", "V": "Desemp_CO2", "W": "CUSUM_CO2"
+            }
+            for let, field in cols_map.items():
+                c = ws_mon[f"{let}{f}"]
+                val = row.get(field, 0)
+                if field in ["Desemp_Pct", "Avance_Pot", "Avance_15"]:
+                    c.value = val / 100
+                    c.number_format = "0.0%"
+                else:
+                    c.value = val
+                    c.number_format = fmt_num
+
+    try:
+        wb.save(path)
+        return True
+    except: return False
+
+def escribir_resultados_m2(path, df_lben, df_mon, df_base_f, df_excluidos, meta, config):
+    if not os.path.exists(path): return False
+    wb = load_workbook(path)
+    fmt_num = "#,##0.00"
+
+    # 1. Hoja Período_Base: Llenar L, M, N (indices 11, 12, 13)
+    if df_base_f is not None:
+        ws_base = wb["Período_Base"]
+        for i, row in df_base_f.iterrows():
+            f = 8 + i
+            ws_base[f"L{f}"].value = row.get("Normalizado"); ws_base[f"L{f}"].number_format = fmt_num
+            ws_base[f"M{f}"].value = row.get("Ajustado"); ws_base[f"M{f}"].number_format = fmt_num
+            ws_base[f"N{f}"].value = row.get("Cociente"); ws_base[f"N{f}"].number_format = fmt_num
+
+    # 2. Hoja Modelo_LBEn: Ficha Técnica e Identificación
+    ws_mod = wb["Modelo_LBEn"]
+    ws_mod["D5"] = config.get("nombre")
+    ws_mod["D6"] = config.get("fuente")
+    ws_mod["D7"] = config.get("unidad")
+    ws_mod["D10"] = config.get("var_relevante_nom")
+    ws_mod["D11"] = config.get("var_relevante_uni")
+    
+    ws_mod["K5"] = "M2 (Cociente de Valores Medidos)"
+    ws_mod["K6"] = meta.get("n_inicial")
+    ws_mod["K7"] = meta.get("n_filt_est")
+    ws_mod["K8"] = meta.get("n_filt_man")
+    ws_mod["K9"] = meta.get("n_final")
+    ws_mod["K10"].value = meta.get("fiability", 0)/100; ws_mod["K10"].number_format = "0.0%"
+    
+    ws_mod["M5"] = config.get("pb_ini")
+    ws_mod["M6"] = config.get("pb_fin")
+    ws_mod["M7"].value = meta.get("consumo_promedio_anual",0); ws_mod["M7"].number_format = fmt_num
+    ws_mod["M8"].value = meta.get("potencial_ahorro_kwh",0); ws_mod["M8"].number_format = fmt_num
+    ws_mod["M9"].value = meta.get("potencial_ahorro_pct",0)/100; ws_mod["M9"].number_format = "0.0%"
+    ws_mod["M10"].value = meta.get("meta_15",0); ws_mod["M10"].number_format = fmt_num
+
+    # Tablas Modelo (Cocientes)
+    j_sum = 0
+    k_sum = 0
+    m_sum = 0
+    for i, row in df_lben.iterrows():
+        f = 16 + i
+        # Tabla LBEn Mensual (C a G)
+        for col_l, field in zip(["C", "D", "E", "F", "G"], ["lben", "n_usados", "lim_inf", "lim_sup", "prom_var_rel"]):
+            ws_mod[f"{col_l}{f}"].value = row[field]
+            ws_mod[f"{col_l}{f}"].number_format = fmt_num if field != "n_usados" else "0"
+        
+        # Tabla Ahorro (J a N)
+        ws_mod[f"J{f}"].value = row['lben']; ws_mod[f"J{f}"].number_format = fmt_num
+        ws_mod[f"K{f}"].value = row['min_hist']; ws_mod[f"K{f}"].number_format = fmt_num
+        ws_mod[f"L{f}"].value = row['lben'] - row['min_hist']; ws_mod[f"L{f}"].number_format = fmt_num
+        ws_mod[f"M{f}"].value = row['ahorro_kwh_mes']; ws_mod[f"M{f}"].number_format = fmt_num
+        if row['lben'] > 0:
+            ws_mod[f"N{f}"].value = (row['lben']-row['min_hist'])/row['lben']; ws_mod[f"N{f}"].number_format = "0.0%"
+        
+        j_sum += row['lben']
+        k_sum += row['min_hist']
+        m_sum += row['ahorro_kwh_mes']
+
+    # Fila 28: Totales
+    ws_mod["J28"].value = j_sum/12; ws_mod["J28"].number_format = fmt_num
+    ws_mod["K28"].value = k_sum/12; ws_mod["K28"].number_format = fmt_num
+    ws_mod["L28"].value = (j_sum-k_sum)/12; ws_mod["L28"].number_format = fmt_num
+    ws_mod["M28"].value = m_sum; ws_mod["M28"].number_format = fmt_num
+    if j_sum > 0:
+        ws_mod["N28"].value = (j_sum-k_sum)/j_sum; ws_mod["N28"].number_format = "0.0%"
+
+    # Informe Excluidos
+    if df_excluidos is not None and not df_excluidos.empty:
+        for i, row in df_excluidos.iterrows():
+            f = 35 + i
+            ws_mod[f"B{f}"] = row['Fecha']
+            ws_mod[f"D{f}"].value = row['Consumo']; ws_mod[f"D{f}"].number_format = fmt_num
+
+    # 3. Monitoreo M2 (M a Y)
+    if df_mon is not None and not df_mon.empty:
+        ws_mon = wb["Monitoreo"]
+        for i, row in df_mon.iterrows():
+            f = 8 + i
+            cols_map = {
+                "M": "Normalizado", "N": "Ajustado", "O": "Cociente_Real", 
+                "P": "LBEn_Ratio", "Q": "Desemp_kWh", "R": "Desemp_Pct", 
+                "S": "CUSUM_kWh", "T": "Avance_Pot", "U": "Avance_15",
+                "V": "Desemp_COP", "W": "CUSUM_COP", "X": "Desemp_CO2", "Y": "CUSUM_CO2"
             }
             for let, field in cols_map.items():
                 c = ws_mon[f"{let}{f}"]
