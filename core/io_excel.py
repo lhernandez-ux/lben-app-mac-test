@@ -156,6 +156,9 @@ def _generar_fechas_mensuales(f_ini, f_fin):
             else: curr = curr.replace(month=curr.month+1)
         return res
     except: return []
+def _limpiar_nombre(n):
+    import re
+    return re.sub(r"[^\w\s-]", "", n.strip().lower()).replace(" ", "_")[:50]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # B — LECTURA DE DATOS
@@ -359,8 +362,8 @@ def escribir_resultados_m2(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
         ws_base = wb["Período_Base"]
         for i, row in df_base_f.iterrows():
             f = 8 + i
-            ws_base[f"L{f}"].value = row.get("Normalizado"); ws_base[f"L{f}"].number_format = fmt_num
-            ws_base[f"M{f}"].value = row.get("Ajustado"); ws_base[f"M{f}"].number_format = fmt_num
+            ws_base[f"L{f}"].value = row.get("Consumo", row.get("Normalizado")); ws_base[f"L{f}"].number_format = fmt_num
+            ws_base[f"M{f}"].value = row.get("Variable", row.get("Ajustado")); ws_base[f"M{f}"].number_format = fmt_num
             ws_base[f"N{f}"].value = row.get("Cociente"); ws_base[f"N{f}"].number_format = fmt_num
 
     # 2. Hoja Modelo_LBEn: Ficha Técnica e Identificación
@@ -373,16 +376,16 @@ def escribir_resultados_m2(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
     
     ws_mod["K5"] = "M2 (Cociente de Valores Medidos)"
     ws_mod["K6"] = meta.get("n_inicial")
-    ws_mod["K7"] = meta.get("n_filt_est")
-    ws_mod["K8"] = meta.get("n_filt_man")
+    ws_mod["K7"] = meta.get("n_filtrado") # Sincronizado
+    ws_mod["K8"] = meta.get("n_exch_man", 0)
     ws_mod["K9"] = meta.get("n_final")
-    ws_mod["K10"].value = meta.get("fiability", 0)/100; ws_mod["K10"].number_format = "0.0%"
+    ws_mod["K10"].value = meta.get("fiabilidad", 0)/100; ws_mod["K10"].number_format = "0.0%"
     
     ws_mod["M5"] = config.get("pb_ini")
     ws_mod["M6"] = config.get("pb_fin")
     ws_mod["M7"].value = meta.get("consumo_promedio_anual",0); ws_mod["M7"].number_format = fmt_num
     ws_mod["M8"].value = meta.get("potencial_ahorro_kwh",0); ws_mod["M8"].number_format = fmt_num
-    ws_mod["M9"].value = meta.get("potencial_ahorro_pct",0)/100; ws_mod["M9"].number_format = "0.0%"
+    ws_mod["M9"].value = meta.get("potencial_ahorro_pct", 0)/100; ws_mod["M9"].number_format = "0.0%"
     ws_mod["M10"].value = meta.get("meta_15",0); ws_mod["M10"].number_format = fmt_num
 
     # Tablas Modelo (Cocientes)
@@ -429,7 +432,7 @@ def escribir_resultados_m2(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
         for i, row in df_mon.iterrows():
             f = 8 + i
             cols_map = {
-                "M": "Normalizado", "N": "Ajustado", "O": "Cociente_Real", 
+                "M": "Cons_Num", "N": "VarRel_Num", "O": "Cociente_Real", 
                 "P": "LBEn_Ratio", "Q": "Desemp_kWh", "R": "Desemp_Pct", 
                 "S": "CUSUM_kWh", "T": "Avance_Pot", "U": "Avance_15",
                 "V": "Desemp_COP", "W": "CUSUM_COP", "X": "Desemp_CO2", "Y": "CUSUM_CO2"
@@ -448,7 +451,3 @@ def escribir_resultados_m2(path, df_lben, df_mon, df_base_f, df_excluidos, meta,
         wb.save(path)
         return True
     except: return False
-
-def _limpiar_nombre(n):
-    import re
-    return re.sub(r"[^\w\s-]", "", n.strip().lower()).replace(" ", "_")[:50]

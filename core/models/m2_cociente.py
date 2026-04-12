@@ -235,14 +235,39 @@ def calcular_resumen_metricas_m2(df_lben, df_base_raw):
     n_exch_man = (df_base_raw[df_base_raw.columns[8]].astype(str).str.upper() == 'SI').sum()
     n_final = df_lben['n_usados'].sum()
     
+    # Construir tabla de potenciales para la UI
+    tabla_potenciales = []
+    meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    for i, row in df_lben.iterrows():
+        tabla_potenciales.append([
+            meses_nombres[i],
+            row['lben'],
+            row['min_hist'],
+            row['lben'] - row['min_hist'],
+            row['ahorro_kwh_mes'],
+            (row['ahorro_kwh_mes'] / (row['lben'] * row['prom_var_rel']) * 100) if (row['lben'] * row['prom_var_rel']) > 0 else 0
+        ])
+    
+    # Agregar fila de promedio anual
+    tabla_potenciales.append([
+        "PROMEDIO ANUAL",
+        prom_ratio_anual,
+        df_lben['min_hist'].mean(),
+        prom_ratio_anual - df_lben['min_hist'].mean(),
+        ahorro_anual,
+        (ahorro_anual / consumo_anual * 100) if consumo_anual > 0 else 0
+    ])
+
     return {
         "consumo_promedio_anual": consumo_anual,
         "potencial_ahorro_kwh": ahorro_anual,
         "potencial_ahorro_pct": (ahorro_anual / consumo_anual * 100) if consumo_anual > 0 else 0,
         "n_inicial": n_inicial,
-        "n_filt_est": n_inicial - n_final - n_exch_man,
-        "n_filt_man": n_exch_man,
+        "n_filtrado": n_inicial - n_final,
         "n_final": n_final,
-        "fiability": (n_final / n_inicial * 100) if n_inicial > 0 else 0,
-        "meta_15": consumo_anual * 0.15
+        "fiabilidad": (n_final / n_inicial * 100) if n_inicial > 0 else 0,
+        "periodo_inicio": str(df_base_raw.iloc[0,0]),
+        "periodo_fin": str(df_base_raw.iloc[-1,0]),
+        "meta_15": consumo_anual * 0.15,
+        "tabla_potenciales": tabla_potenciales
     }
