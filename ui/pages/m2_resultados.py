@@ -458,47 +458,58 @@ class M2ResultadosPage(ctk.CTkFrame):
         inner_tbl.pack(fill="both", expand=True)
 
         COL_W = 140
-        headers = ["Fecha", "Norm. (kWh)", "Cociente",
-                   "LBEn (kWh)", "Desemp. (kWh)", "Desemp. (%)", "CUSUM (kWh)"]
+        headers = [
+            "Fecha", "Norm. (kWh)", "Cociente", "LBEn (kWh)", 
+            "Desemp. (kWh)", "Desemp. (%)", "CUSUM (kWh)", 
+            "Avance Pot. (%)", "Avance 15% (%)", 
+            "Econ. (COP)", "Econ. Acu. (COP)", 
+            "Amb. (CO2)", "Amb. Acu. (CO2)"
+        ]
         
         h_frame = ctk.CTkFrame(inner_tbl, fg_color=COLORS.primary, height=35)
         h_frame.pack(fill="x")
         for i, h in enumerate(headers):
             ctk.CTkLabel(h_frame, text=h, text_color="white",
-                         font=(FONTS.family, 11, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
+                         font=(FONTS.family, 10, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
 
         # 3. Contenedor Vertical para las filas
         v_scroll = ctk.CTkScrollableFrame(inner_tbl, fg_color="transparent", height=320, orientation="vertical")
         v_scroll.pack(fill="both", expand=True)
 
-        col_map = ["FechaStr", "Cons_Num", "Cociente_Real",
-                   "LBEn_Ratio", "Desemp_kWh", "Desemp_Pct", "CUSUM_kWh"]
+        col_map = [
+            "FechaStr", "Cons_Num", "Cociente_Real", "LBEn_Ratio",
+            "Desemp_kWh", "Desemp_Pct", "CUSUM_kWh",
+            "Avance_Pot", "Avance_15", 
+            "Desemp_COP", "CUSUM_COP", "Desemp_CO2", "CUSUM_CO2"
+        ]
         for _, row in dfm.iterrows():
             r = ctk.CTkFrame(v_scroll, fg_color="transparent")
             r.pack(fill="x", pady=1)
             for c_idx, col in enumerate(col_map):
                 val = row.get(col, "---")
                 color = COLORS.text_primary
-                if c_idx == 4:  # Desemp kWh
+                
+                # Resaltar en rojo/verde columnas de desempeño
+                # Indices: 4(Desemp), 5(%), 6(CUSUM), 9(Econ), 10(Econ Acu), 11(Amb), 12(Amb Acu)
+                if c_idx in [4, 5, 6, 9, 10, 11, 12]:
                     try:
-                        fv = float(val)
-                        txt = f"{fv:,.1f}"
-                        color = COLORS.success if fv <= 0 else COLORS.danger
-                    except Exception:
-                        txt = str(val)
-                elif c_idx == 5:  # Desemp %
-                    try:
-                        fv = float(val)
-                        txt = f"{fv:.1f}%"
-                        color = COLORS.success if fv <= 0 else COLORS.danger
-                    except Exception:
-                        txt = str(val)
-                elif isinstance(val, (float, int)):
-                    txt = f"{val:,.2f}"
+                        # Usamos Desemp_kWh (col 4) para decidir el color de todo el bloque de desempeño
+                        des_val = float(row.get("Desemp_kWh", 0))
+                        color = COLORS.success if des_val <= 0 else COLORS.danger
+                    except: pass
+
+                # Formateo según tipo
+                if c_idx in [5, 7, 8]: # Porcentajes
+                    txt = f"{float(val):.1f}%" if isinstance(val, (int, float)) else str(val)
+                elif c_idx in [9, 10]: # COP (Sin decimales)
+                    txt = f"{float(val):,.0f}" if isinstance(val, (int, float)) else str(val)
+                elif isinstance(val, (int, float)):
+                    txt = f"{val:,.1f}"
                 else:
                     txt = str(val)
+
                 ctk.CTkLabel(r, text=txt, width=COL_W,
-                             font=(FONTS.family, 11), text_color=color
+                             font=(FONTS.family, 10), text_color=color
                              ).grid(row=0, column=c_idx, padx=5)
             ctk.CTkFrame(v_scroll, fg_color=COLORS.border, height=1).pack(fill="x")
 
