@@ -447,24 +447,34 @@ class M2ResultadosPage(ctk.CTkFrame):
                      font=(FONTS.family, 13, "bold"),
                      text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
 
-        tbl = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
-                                     height=320, orientation="horizontal",
+        # 1. Contenedor Horizontal Exterior
+        h_scroll = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
+                                     height=380, orientation="horizontal",
                                      border_width=1, border_color=COLORS.border)
-        tbl.pack(fill="x", pady=(0, 20))
+        h_scroll.pack(fill="x", pady=(0, 20))
+
+        # 2. Frame interno para Header + Body
+        inner_tbl = ctk.CTkFrame(h_scroll, fg_color="transparent")
+        inner_tbl.pack(fill="both", expand=True)
 
         COL_W = 140
         headers = ["Fecha", "Norm. (kWh)", "Cociente",
                    "LBEn (kWh)", "Desemp. (kWh)", "Desemp. (%)", "CUSUM (kWh)"]
-        h_frame = ctk.CTkFrame(tbl, fg_color=COLORS.primary, height=35)
+        
+        h_frame = ctk.CTkFrame(inner_tbl, fg_color=COLORS.primary, height=35)
         h_frame.pack(fill="x")
         for i, h in enumerate(headers):
             ctk.CTkLabel(h_frame, text=h, text_color="white",
                          font=(FONTS.family, 11, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
 
+        # 3. Contenedor Vertical para las filas
+        v_scroll = ctk.CTkScrollableFrame(inner_tbl, fg_color="transparent", height=320, orientation="vertical")
+        v_scroll.pack(fill="both", expand=True)
+
         col_map = ["FechaStr", "Cons_Num", "Cociente_Real",
                    "LBEn_Ratio", "Desemp_kWh", "Desemp_Pct", "CUSUM_kWh"]
         for _, row in dfm.iterrows():
-            r = ctk.CTkFrame(tbl, fg_color="transparent")
+            r = ctk.CTkFrame(v_scroll, fg_color="transparent")
             r.pack(fill="x", pady=1)
             for c_idx, col in enumerate(col_map):
                 val = row.get(col, "---")
@@ -483,14 +493,14 @@ class M2ResultadosPage(ctk.CTkFrame):
                         color = COLORS.success if fv <= 0 else COLORS.danger
                     except Exception:
                         txt = str(val)
-                elif isinstance(val, float):
+                elif isinstance(val, (float, int)):
                     txt = f"{val:,.2f}"
                 else:
                     txt = str(val)
                 ctk.CTkLabel(r, text=txt, width=COL_W,
                              font=(FONTS.family, 11), text_color=color
                              ).grid(row=0, column=c_idx, padx=5)
-            ctk.CTkFrame(tbl, fg_color=COLORS.border, height=1).pack(fill="x")
+            ctk.CTkFrame(v_scroll, fg_color=COLORS.border, height=1).pack(fill="x")
 
         # ── Gráfico 1: Real vs Meta ──
         self._chart_seguimiento(scroll, dfm)

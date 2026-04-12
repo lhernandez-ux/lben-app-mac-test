@@ -386,10 +386,15 @@ class M1ResultadosPage(ctk.CTkFrame):
     def _tabla_monitoreo_detallada(self, parent):
         ctk.CTkLabel(parent, text="DATOS DE MONITOREO", font=(FONTS.family, 14, "bold"), text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(10, 10))
         
-        tbl_container = ctk.CTkScrollableFrame(parent, fg_color=COLORS.bg_card, height=400, orientation="horizontal", border_width=1, border_color=COLORS.border)
-        tbl_container.pack(fill="x")
+        # 1. Contenedor Horizontal Exterior (para las columnas)
+        # Aumentamos un poco el alto para contener el scroll vertical interno
+        h_scroll = ctk.CTkScrollableFrame(parent, fg_color=COLORS.bg_card, height=450, orientation="horizontal", border_width=1, border_color=COLORS.border)
+        h_scroll.pack(fill="x")
 
-        # Columnas solicitadas (Filas L a W en Excel logic)
+        # 2. Frame interno para organizar Header y Body verticalmente
+        inner_frame = ctk.CTkFrame(h_scroll, fg_color="transparent")
+        inner_frame.pack(fill="both", expand=True)
+
         headers = [
             "Fecha", "Norm. (kWh)", "Adj. (kWh)", "LBEn (kWh)", 
             "Desemp. (kWh)", "Desemp. (%)", "CUSUM (kWh)", 
@@ -398,19 +403,21 @@ class M1ResultadosPage(ctk.CTkFrame):
             "Amb. (kgCO2e)", "Amb. Acum. (kgCO2e)"
         ]
         
-        h_frame = ctk.CTkFrame(tbl_container, fg_color=COLORS.primary, height=40)
+        h_frame = ctk.CTkFrame(inner_frame, fg_color=COLORS.primary, height=40)
         h_frame.pack(fill="x")
         
         col_width = 135
         for i, h in enumerate(headers):
             ctk.CTkLabel(h_frame, text=h, text_color="white", font=(FONTS.family, 10, "bold"), width=col_width).grid(row=0, column=i, padx=5)
 
-        # Usamos df_mon (que ya viene filtrado de meses vacíos por el motor)
+        # 3. Contenedor Vertical para las filas (el scroll exclusivo)
+        v_scroll = ctk.CTkScrollableFrame(inner_frame, fg_color="transparent", height=380, orientation="vertical")
+        v_scroll.pack(fill="both", expand=True)
+
         for _, row in self.df_mon.iterrows():
-            r_frame = ctk.CTkFrame(tbl_container, fg_color="transparent")
+            r_frame = ctk.CTkFrame(v_scroll, fg_color="transparent")
             r_frame.pack(fill="x", pady=1)
             
-            # Formateo de colores para desempeño
             color_des = COLORS.success if row['Desemp_kWh'] <= 0 else COLORS.danger
             
             vals = [
@@ -433,7 +440,7 @@ class M1ResultadosPage(ctk.CTkFrame):
                 txt_c = color_des if i in [4, 5, 6, 9, 10, 11, 12] else COLORS.text_primary
                 ctk.CTkLabel(r_frame, text=v, width=col_width, font=(FONTS.family, 10), text_color=txt_c).grid(row=0, column=i, padx=5)
             
-            ctk.CTkFrame(tbl_container, fg_color=COLORS.border, height=1).pack(fill="x")
+            ctk.CTkFrame(v_scroll, fg_color=COLORS.border, height=1).pack(fill="x")
 
     def _graficas_monitoreo(self, parent):
         # Gráfico 1: Seguimiento Real vs Meta
