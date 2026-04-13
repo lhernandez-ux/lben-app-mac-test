@@ -77,25 +77,40 @@ class M3CargaPage(ctk.CTkFrame):
         if not path: return
         
         try:
-            from core.io_excel import leer_excel_m1 # M3 usa estructura de hojas compatible con M1 (Período_Base y Monitoreo)
+            # 1. Leer estructura básica (Fecha y Metadatos)
+            from core.io_excel import leer_excel_m1
             df_b, df_m, meta, errores = leer_excel_m1(path)
             
-            # Ajustar para detectar variables de M3 (E a I en Período_Base)
-            # Releemos las columnas extras
-            wb = pd.ExcelFile(path)
-            df_full = pd.read_excel(wb, sheet_name="Período_Base", skiprows=5)
-            # Las variables están en las columnas E, F, G, H, I (índices 4-8)
-            vars_cols = []
-            for col in range(4, 9):
-                cname = df_full.columns[col]
-                if "Unnamed" not in str(cname) and cname != "—": vars_cols.append(cname)
+            # 2. Releer con Pandas para capturar las 5 variables multivariable
+            # Forzamos los nombres de columnas por posición para evitar el error "Consumo not in index"
+            xl = pd.ExcelFile(path)
+            df_full = pd.read_excel(xl, sheet_name="Período_Base", skiprows=6, header=None)
+            # Row 6 (headers) en Excel es skiprows=6 para data pura, pero queremos los nombres
+            df_headers = pd.read_excel(xl, sheet_name="Período_Base", skiprows=5, nrows=1)
             
-            if not vars_cols:
-                messagebox.showerror("Error", "No se detectaron variables independientes en las columnas E a I de la hoja Período_Base.")
-                return
+            # Mapeo posicional (A=0, B=1[Fecha], C=2[Consumo], D=3, E=4[Var1], F=5, G=6, H=7, I=8)
+            # Ajustamos porque df_full leido sin header=None usa la fila 6 como cabecera:
+            df_full = pd.read_excel(xl, sheet_name="Período_Base", skiprows=5)
+            
+            # Normalizar nombres de columnas eliminando espacios y forzando detección
+            df_full.columns = [str(c).strip() for c in df_full.columns]
+            
+            # Identificar variables en E, F, G, H, I (posiciones 4 a 8 si Col A es 0)
+            vars_cols = []
+            cols_lista = df_full.columns.tolist()
+            for i in range(4, 9):
+                if i < len(cols_lista):
+                    cname = cols_lista[i]
+                    if "Unnamed" not in str(cname) and cname != "—":
+                        vars_cols.append(cname)
 
-            self.df_base = df_full[["Fecha", "Consumo"] + vars_cols].dropna(subset=["Fecha"]).head(len(df_b))
-            self.df_monitoreo = pd.read_excel(wb, sheet_name="Monitoreo", skiprows=5)
+            # Buscamos "Fecha" y "Consumo" por posición si falla el nombre
+            col_fecha = cols_lista[1] if len(cols_lista) > 1 else "Fecha"
+            col_consumo = cols_lista[2] if len(cols_lista) > 2 else "Consumo"
+
+            self.df_base = df_full[[col_fecha, col_consumo] + vars_cols].dropna(subset=[col_fecha]).head(len(df_b))
+            self.df_base.rename(columns={col_fecha: "Fecha", col_consumo: "Consumo"}, inplace=True)
+            self.df_monitoreo = pd.read_excel(xl, sheet_name="Monitoreo", skiprows=5)
             # Limpiar monitoreo
             self.df_monitoreo = self.df_monitoreo[self.df_monitoreo["Fecha"].notna()]
 
