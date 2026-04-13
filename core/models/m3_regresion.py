@@ -12,6 +12,15 @@ def ejecutar_modelo_m3(df_base_original, df_mon_original, target_var, feature_va
     # 1. Preparación y Filtrado de Outliers (LBEn)
     df_base = df_base_original.copy()
     
+    # Asegurar que feature_vars son todos strings
+    feature_vars = [str(v) for v in feature_vars]
+    
+    # Convertir columnas numéricas relevantes a float, ignorando errores
+    for col in [target_var] + feature_vars:
+        if col in df_base.columns:
+            df_base[col] = pd.to_numeric(df_base[col], errors='coerce')
+    df_base.dropna(subset=[target_var] + feature_vars, inplace=True)
+    
     # Filtrado estadístico moderado (+-3 desv std) sobre el target
     media = df_base[target_var].mean()
     std = df_base[target_var].std()
@@ -72,13 +81,19 @@ def ejecutar_modelo_m3(df_base_original, df_mon_original, target_var, feature_va
     # 6. Monitoreo
     df_mon = df_mon_original.copy()
     if not df_mon.empty:
-        X_mon = sm.add_constant(df_mon[feature_vars], has_constant='add')
-        # Aseguramos que X_mon tenga las mismas columnas que X_base (por si faltan en df_mon)
-        for col in X_base.columns:
-            if col not in X_mon.columns: X_mon[col] = 0
-        X_mon = X_mon[X_base.columns] # Reordenar
-        
-        df_mon['lben_mes'] = model_lben.predict(X_mon)
+        # Convertir a float las variables del modelo en monitoreo
+        for col in feature_vars:
+            if col in df_mon.columns:
+                df_mon[col] = pd.to_numeric(df_mon[col], errors='coerce').fillna(0)
+            else:
+                df_mon[col] = 0
+        df_mon_clean = df_mon.dropna(subset=feature_vars)
+        if not df_mon_clean.empty:
+            X_mon = sm.add_constant(df_mon_clean[feature_vars], has_constant='add')
+            for col in X_base.columns:
+                if col not in X_mon.columns: X_mon[col] = 0
+            X_mon = X_mon[X_base.columns]
+            df_mon.loc[df_mon_clean.index, 'lben_mes'] = model_lben.predict(X_mon)
     
     results = {
         'model_lben': model_lben,
@@ -116,10 +131,14 @@ def ejecutar_modelo_m3(df_base_original, df_mon_original, target_var, feature_va
 
 def formatear_ecuacion(model, feature_vars):
     """Genera el string de la ecuación: y = b0 + b1*X1 + ..."""
+    feature_vars = [str(v) for v in feature_vars]  # Garantizar strings
     params = model.params
-    eq = f"y = {params[0]:.4f}"
-    for i, var in enumerate(feature_vars):
-        coef = params[i+1]
-        signo = "+" if coef >= 0 else "-"
-        eq += f" {signo} {abs(coef):.4f}·{var}"
+    try:
+        eq = f"y = {params[0]:.4f}"
+        for i, var in enumerate(feature_vars):
+            coef = params[i + 1]
+            signo = "+" if coef >= 0 else "-"
+            eq += f" {signo} {abs(coef):.4f}·{var}"
+    except Exception:
+        eq = "Ec. no disponible"
     return eq

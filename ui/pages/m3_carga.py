@@ -96,12 +96,15 @@ class M3CargaPage(ctk.CTkFrame):
             df_full.columns = [str(c).strip() for c in df_full.columns]
             
             # Identificar variables en E, F, G, H, I (posiciones 4 a 8 si Col A es 0)
+            # Excluir: celdas vacías (Unnamed), marcadores "—" y sus variantes ("—.1", "—.2"...)
             vars_cols = []
             cols_lista = df_full.columns.tolist()
             for i in range(4, 9):
                 if i < len(cols_lista):
-                    cname = cols_lista[i]
-                    if "Unnamed" not in str(cname) and cname != "—":
+                    cname = str(cols_lista[i]).strip()
+                    es_vacio = "Unnamed" in cname
+                    es_marcador = cname == "—" or cname.startswith("—.")
+                    if not es_vacio and not es_marcador:
                         vars_cols.append(cname)
 
             # Buscamos "Fecha" y "Consumo" por posición si falla el nombre
