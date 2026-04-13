@@ -171,7 +171,29 @@ class M3ResultadosPage(ctk.CTkFrame):
             ctk.CTkLabel(row_f, text=f"{ct['p_vals'][i]:,.4f}", width=120).grid(row=0, column=3, padx=5)
             ctk.CTkLabel(row_f, text="---" if np.isnan(ct['vif'][i]) else f"{ct['vif'][i]:.2f}", width=120).grid(row=0, column=4, padx=5)
 
-        self._tabla_simple(scroll, "3. SUPUESTOS DEL MODELO", [
+        # 3. Correlaciones de Pearson
+        cp_lbl = ctk.CTkLabel(scroll, text="3. CORRELACIONES DE PEARSON — Variables vs Consumo", font=(FONTS.family, 13, "bold"), text_color=COLORS.primary, anchor="w")
+        cp_lbl.pack(fill="x", pady=(20,10))
+        cp_card = ctk.CTkFrame(scroll, fg_color=COLORS.bg_card, border_width=1, border_color=COLORS.border)
+        cp_card.pack(fill="x")
+        
+        cp_headers = ["Variable", "r (Pearson)", "p-valor", "Grado Influencia"]
+        cp_h_f = ctk.CTkFrame(cp_card, fg_color=COLORS.primary, height=30)
+        cp_h_f.pack(fill="x")
+        for i, h in enumerate(cp_headers):
+            ctk.CTkLabel(cp_h_f, text=h, text_color="white", font=(FONTS.family, 10, "bold"), width=150).grid(row=0, column=i, padx=5)
+            
+        for c in self.res.get('correls', []):
+            row_f = ctk.CTkFrame(cp_card, fg_color="transparent")
+            row_f.pack(fill="x")
+            r_abs = abs(c['r'])
+            grado = "Fuerte" if r_abs >= 0.70 else "Moderada" if r_abs >= 0.50 else "Débil"
+            ctk.CTkLabel(row_f, text=c['var'], width=150).grid(row=0, column=0, padx=5)
+            ctk.CTkLabel(row_f, text=f"{c['r']:.4f}", width=150).grid(row=0, column=1, padx=5)
+            ctk.CTkLabel(row_f, text=f"{c['p']:.4f}", width=150).grid(row=0, column=2, padx=5)
+            ctk.CTkLabel(row_f, text=grado, width=150).grid(row=0, column=3, padx=5)
+
+        self._tabla_simple(scroll, "4. DIAGNÓSTICO DE SUPUESTOS", [
             ("Homocedasticidad (Breusch-Pagan p-val)", f"{m['bp_pval']:.4f}"),
             ("Interpretación", "Varianza constante" if m['bp_pval'] > 0.05 else "Heterocedasticidad Detectada")
         ], pady=20)
@@ -273,8 +295,8 @@ class M3ResultadosPage(ctk.CTkFrame):
         inner = ctk.CTkFrame(h_scroll, fg_color="transparent")
         inner.pack(fill="both")
 
-        headers = ["Fecha", "Real (kWh)", "Ajustado", "LBEn (kWh)", "Desempeño", "CUSUM (kWh)", "Avance %"]
-        col_w = 130
+        headers = ["Fecha", "Ajustado", "LBEn", "D. Mensual", "CUSUM", "Avance Pot.", "Avance Meta", "Eco ($)", "Amb (CO2)"]
+        col_w = 110
         h_f = ctk.CTkFrame(inner, fg_color=COLORS.primary, height=35)
         h_f.pack(fill="x")
         for i, h in enumerate(headers):
@@ -283,16 +305,36 @@ class M3ResultadosPage(ctk.CTkFrame):
         v_scroll = ctk.CTkScrollableFrame(inner, fg_color="transparent", height=300)
         v_scroll.pack(fill="both")
 
-        pot_anual = self.res['potenciales']['ahorro_kwh'] * 12
+        pot_anual  = self.res['potenciales']['ahorro_kwh'] * 12
+        meta_anual = self.res['potenciales']['prom_real'] * 12 * 0.15
+        tarifa     = self.res.get('tarifa_prom', 0) # Fallback if missing
+        factor_em  = self.res.get('factor_prom', 0)
 
         for _, row in dfm.iterrows():
             rf = ctk.CTkFrame(v_scroll, fg_color="transparent")
             rf.pack(fill="x")
-            avance = f"{(row['CUSUM']/pot_anual)*100:.1f}%" if pot_anual > 0 else "0%"
-            vals = [row['FechaStr'], f"{row['_consumo_num']:,.1f}", f"{row['Ajustado']:,.1f}",
-                    f"{row['lben_mes']:,.1f}", f"{row['Desemp']:,.1f}", f"{row['CUSUM']:,.1f}", avance]
+            
+            av_pot  = f"{(row['CUSUM']/pot_anual)*100*-1:.1f}%" if pot_anual != 0 else "---"
+            av_meta = f"{(row['CUSUM']/meta_anual)*100*-1:.1f}%" if meta_anual != 0 else "---"
+            
+            # Intentar leer tarifa/factor de la fila si existen
+            t_row = row.get('Tarifa', tarifa)
+            f_row = row.get('Factor Emisión', factor_em)
+            
+            eco_mensual = row['Desemp'] * t_row
+            amb_mensual = row['Desemp'] * f_row
+            
+            vals = [
+                row['FechaStr'], 
+                f"{row['Ajustado']:,.0f}", 
+                f"{row['lben_mes']:,.0f}",
+                f"{row['Desemp']:,.0f}", 
+                f"{row['CUSUM']:,.0f}", 
+                av_pot, av_meta,
+                f"${-eco_mensual:,.0f}", f"{-amb_mensual:,.1f}"
+            ]
             for i, v in enumerate(vals):
-                color = COLORS.success if i==4 and row['Desemp']<=0 else COLORS.danger if i==4 else COLORS.text_primary
+                color = COLORS.success if i==3 and row['Desemp']<=0 else COLORS.danger if i==3 else COLORS.text_primary
                 ctk.CTkLabel(rf, text=v, width=col_w, text_color=color).grid(row=0, column=i, padx=5)
             ctk.CTkFrame(v_scroll, fg_color=COLORS.border, height=1).pack(fill="x")
 
@@ -320,6 +362,10 @@ class M3ResultadosPage(ctk.CTkFrame):
         ax.legend(fontsize=8, loc="upper right")
         plt.xticks(rotation=30, ha="right", fontsize=8); plt.tight_layout()
         FigureCanvasTkAgg(fig, master=f).get_tk_widget().pack(fill="both", padx=10, pady=10)
+        
+        ctk.CTkButton(f, text="🌐 Ver Interactivo en Navegador", font=(FONTS.family, 11, "bold"),
+                      fg_color="transparent", text_color=COLORS.primary, border_width=1, border_color=COLORS.primary,
+                      command=lambda: self._abrir_grafica_interactiva(dfm, "monto")).pack(pady=(0, 15))
 
     def _chart_cusum(self, parent, dfm):
         f = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12, border_width=1, border_color=COLORS.border)
@@ -338,6 +384,32 @@ class M3ResultadosPage(ctk.CTkFrame):
         ax.set_title("CUSUM — Desempeño Energético Acumulado", fontdict={"size":10, "weight":"bold"})
         plt.xticks(rotation=30, ha="right", fontsize=8); plt.tight_layout()
         FigureCanvasTkAgg(fig, master=f).get_tk_widget().pack(fill="both", padx=10, pady=10)
+        
+        ctk.CTkButton(f, text="🌐 Ver Interactivo en Navegador", font=(FONTS.family, 11, "bold"),
+                      fg_color="transparent", text_color=COLORS.primary, border_width=1, border_color=COLORS.primary,
+                      command=lambda: self._abrir_grafica_interactiva(dfm, "cusum")).pack(pady=(0, 15))
+
+    def _abrir_grafica_interactiva(self, dfm, tipo):
+        try:
+            fig = go.Figure()
+            fechas = dfm["FechaStr"].tolist()
+            
+            if tipo == "monto":
+                fig.add_trace(go.Scatter(x=fechas, y=dfm["lben_mes"], name="Línea Base", line=dict(dash='dash', color='#2E7D32')))
+                fig.add_trace(go.Scatter(x=fechas, y=dfm["Ajustado"], name="Consumo Ajustado", mode='lines+markers', line=dict(color='#D32F2F')))
+                fig.update_layout(title="Comparativa Consumo vs Línea Base", xaxis_title="Mes", yaxis_title="kWh")
+            else:
+                y_vals = dfm["CUSUM"].tolist()
+                colors = ['#2E7D32' if y_vals[i] <= y_vals[i-1] else '#D32F2F' for i in range(1, len(y_vals))]
+                # Plotly scatter individual segments for coloring or just a single line
+                fig.add_trace(go.Scatter(x=fechas, y=y_vals, name="CUSUM", line=dict(color='#2196F3', width=3)))
+                fig.update_layout(title="CUSUM — Desempeño Energético Acumulado", xaxis_title="Mes", yaxis_title="kWh Acumulado")
+
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+            fig.write_html(tmp.name)
+            webbrowser.open(f"file://{tmp.name}")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir la gráfica: {e}")
 
     def _tabla_simple(self, parent, title, rows, pady=0):
         frame = ctk.CTkFrame(parent, fg_color="transparent")
