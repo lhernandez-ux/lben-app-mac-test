@@ -205,37 +205,92 @@ class M3ResultadosPage(ctk.CTkFrame):
             ctk.CTkLabel(scroll, text="No hay datos de monitoreo.", font=(FONTS.family, 14)).pack(pady=50)
             return
 
+        # ── Detectar columna de consumo real por posición/nombre robusto ──
+        col_consumo = None
+        excluir_cols = {"Fecha", "lben_mes", "FechaStr", "Fecha_DT", "Afectacion", "Tarifa", "Factor Emisión"}
+        
+        # 1. Prioridad: nombres exactos
+        if "Consumo" in dfm.columns: col_consumo = "Consumo"
+        elif "Consumo_kWh" in dfm.columns: col_consumo = "Consumo_kWh"
+        
+        # 2. Búsqueda por subcadena
+        if not col_consumo:
+            for c in dfm.columns:
+                c_low = c.lower()
+                if ("consum" in c_low or "kwh" in c_low) and c not in excluir_cols:
+                    col_consumo = c
+                    break
+        
+        # 3. Fallback: primera numérica no excluida
+        if not col_consumo:
+            for c in dfm.columns:
+                if c not in excluir_cols:
+                    try:
+                        pd.to_numeric(dfm[c], errors='raise')
+                        col_consumo = c
+                        break
+                    except: continue
+
+        if col_consumo is None:
+            ctk.CTkLabel(scroll, text="No se pudo identificar la columna de consumo en monitoreo.",
+                         font=(FONTS.family, 12), text_color=COLORS.danger).pack(pady=30)
+            return
+
+        def _clean_val(v):
+            if v is None: return 0.0
+            if isinstance(v, (int, float)): return float(v)
+            try: return float(str(v).replace(",", "").strip())
+            except: return 0.0
+
+        dfm["_consumo_num"] = dfm[col_consumo].apply(_clean_val)
+        # Columna Afectacion si existe
+        col_afec = "Afectacion" if "Afectacion" in dfm.columns else None
+        dfm["Ajustado"] = dfm["_consumo_num"] + dfm[col_afec].apply(_clean_val) if col_afec else dfm["_consumo_num"]
+        dfm["lben_mes"] = dfm["lben_mes"].apply(_clean_val)
+
+        # FILTRAR: solo filas con consumo real (evitar fechas vacías hasta 2050)
+        dfm = dfm[dfm["_consumo_num"] > 0].reset_index(drop=True)
+
+        dfm["Desemp"] = dfm["Ajustado"] - dfm["lben_mes"]
+        dfm["CUSUM"] = dfm["Desemp"].cumsum()
+
         dfm["Fecha_DT"] = dfm["Fecha"].apply(safe_to_datetime)
         dfm["FechaStr"] = dfm["Fecha_DT"].apply(fmt_fecha_es)
+        # Filtrar solo filas con fecha válida
+        dfm = dfm[dfm["Fecha_DT"].notna()].reset_index(drop=True)
+
+        if dfm.empty:
+            ctk.CTkLabel(scroll, text="No hay datos válidos de monitoreo.", font=(FONTS.family, 14)).pack(pady=50)
+            return
 
         # ── Tabla con Doble Scroll ──
-        ctk.CTkLabel(scroll, text="DATOS DE MONITOREO", font=(FONTS.family, 14, "bold"), text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0,10))
-        
-        h_scroll = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card, height=350, orientation="horizontal", border_width=1, border_color=COLORS.border)
+        ctk.CTkLabel(scroll, text="DATOS DE MONITOREO", font=(FONTS.family, 14, "bold"),
+                     text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0,10))
+
+        h_scroll = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card, height=350,
+                                          orientation="horizontal", border_width=1, border_color=COLORS.border)
         h_scroll.pack(fill="x")
         inner = ctk.CTkFrame(h_scroll, fg_color="transparent")
         inner.pack(fill="both")
-        
+
         headers = ["Fecha", "Real (kWh)", "Ajustado", "LBEn (kWh)", "Desempeño", "CUSUM (kWh)", "Avance %"]
         col_w = 130
         h_f = ctk.CTkFrame(inner, fg_color=COLORS.primary, height=35)
         h_f.pack(fill="x")
-        for i, h in enumerate(headers): ctk.CTkLabel(h_f, text=h, text_color="white", font=(FONTS.family, 10, "bold"), width=col_w).grid(row=0, column=i, padx=5)
-        
+        for i, h in enumerate(headers):
+            ctk.CTkLabel(h_f, text=h, text_color="white", font=(FONTS.family, 10, "bold"), width=col_w).grid(row=0, column=i, padx=5)
+
         v_scroll = ctk.CTkScrollableFrame(inner, fg_color="transparent", height=300)
         v_scroll.pack(fill="both")
-        
-        # Lógica de CUSUM para la tabla
-        dfm['Ajustado'] = dfm['Consumo'] + dfm['Afectacion'].fillna(0)
-        dfm['Desemp'] = dfm['Ajustado'] - dfm['lben_mes']
-        dfm['CUSUM'] = dfm['Desemp'].cumsum()
-        
+
         pot_anual = self.res['potenciales']['ahorro_kwh'] * 12
 
         for _, row in dfm.iterrows():
             rf = ctk.CTkFrame(v_scroll, fg_color="transparent")
             rf.pack(fill="x")
-            vals = [row['FechaStr'], f"{row['Consumo']:,.1f}", f"{row['Ajustado']:,.1f}", f"{row['lben_mes']:,.1f}", f"{row['Desemp']:,.1f}", f"{row['CUSUM']:,.1f}", f"{(row['CUSUM']/pot_anual)*100:.1f}%" if pot_anual > 0 else "0%"]
+            avance = f"{(row['CUSUM']/pot_anual)*100:.1f}%" if pot_anual > 0 else "0%"
+            vals = [row['FechaStr'], f"{row['_consumo_num']:,.1f}", f"{row['Ajustado']:,.1f}",
+                    f"{row['lben_mes']:,.1f}", f"{row['Desemp']:,.1f}", f"{row['CUSUM']:,.1f}", avance]
             for i, v in enumerate(vals):
                 color = COLORS.success if i==4 and row['Desemp']<=0 else COLORS.danger if i==4 else COLORS.text_primary
                 ctk.CTkLabel(rf, text=v, width=col_w, text_color=color).grid(row=0, column=i, padx=5)

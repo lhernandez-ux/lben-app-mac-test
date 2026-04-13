@@ -11,7 +11,8 @@ import pandas as pd
 from tkinter import filedialog, messagebox
 from ui.theme import COLORS, FONTS, DIMS
 from core.models.m3_regresion import ejecutar_modelo_m3
-from core.io_excel import leer_excel_m1 # Reutilizamos lógica de lectura si es compatible o similar
+from core.io_excel import leer_excel_m1, _leer_hoja_datos_generica
+from openpyxl import load_workbook
 
 class M3CargaPage(ctk.CTkFrame):
     def __init__(self, master):
@@ -82,40 +83,33 @@ class M3CargaPage(ctk.CTkFrame):
             df_b, df_m, meta, errores = leer_excel_m1(path)
             
             # 2. Releer con Pandas para capturar las 5 variables multivariable
-            # Forzamos los nombres de columnas por posición para evitar el error "Consumo not in index"
+            from core.io_excel import _leer_hoja_datos_generica
+            
+            # Nota: self.df_base se arma a medida para captar las variables multivariable
+            # pero self.df_monitoreo puede usar la lógica genérica robusta que acabamos de mejorar
+            wb_obj = load_workbook(path, data_only=True)
+            self.df_monitoreo = _leer_hoja_datos_generica(wb_obj["Monitoreo"])
+
+            # Proceso para df_base (Multivariable)
             xl = pd.ExcelFile(path)
-            df_full = pd.read_excel(xl, sheet_name="Período_Base", skiprows=6, header=None)
-            # Row 6 (headers) en Excel es skiprows=6 para data pura, pero queremos los nombres
-            df_headers = pd.read_excel(xl, sheet_name="Período_Base", skiprows=5, nrows=1)
-            
-            # Mapeo posicional (A=0, B=1[Fecha], C=2[Consumo], D=3, E=4[Var1], F=5, G=6, H=7, I=8)
-            # Ajustamos porque df_full leido sin header=None usa la fila 6 como cabecera:
             df_full = pd.read_excel(xl, sheet_name="Período_Base", skiprows=5)
-            
-            # Normalizar nombres de columnas eliminando espacios y forzando detección
             df_full.columns = [str(c).strip() for c in df_full.columns]
             
-            # Identificar variables en E, F, G, H, I (posiciones 4 a 8 si Col A es 0)
-            # Excluir: celdas vacías (Unnamed), marcadores "—" y sus variantes ("—.1", "—.2"...)
-            vars_cols = []
             cols_lista = df_full.columns.tolist()
+            vars_cols = []
             for i in range(4, 9):
                 if i < len(cols_lista):
                     cname = str(cols_lista[i]).strip()
-                    es_vacio = "Unnamed" in cname
-                    es_marcador = cname == "—" or cname.startswith("—.")
-                    if not es_vacio and not es_marcador:
+                    if "Unnamed" not in cname and cname != "—" and not cname.startswith("—."):
                         vars_cols.append(cname)
 
-            # Buscamos "Fecha" y "Consumo" por posición si falla el nombre
             col_fecha = cols_lista[1] if len(cols_lista) > 1 else "Fecha"
             col_consumo = cols_lista[2] if len(cols_lista) > 2 else "Consumo"
 
-            self.df_base = df_full[[col_fecha, col_consumo] + vars_cols].dropna(subset=[col_fecha]).head(len(df_b))
+            self.df_base = df_full[[col_fecha, col_consumo] + vars_cols].dropna(subset=[col_fecha])
+            # Filtrar df_base para que solo tenga registros con consumo (como en M1)
+            self.df_base = self.df_base[pd.to_numeric(self.df_base[col_consumo], errors='coerce') > 0].head(len(df_b))
             self.df_base.rename(columns={col_fecha: "Fecha", col_consumo: "Consumo"}, inplace=True)
-            self.df_monitoreo = pd.read_excel(xl, sheet_name="Monitoreo", skiprows=5)
-            # Limpiar monitoreo
-            self.df_monitoreo = self.df_monitoreo[self.df_monitoreo["Fecha"].notna()]
 
             self.current_path = path
             self.lbl_filename.configure(text=f"✓ {os.path.basename(path)}", text_color=COLORS.success)
