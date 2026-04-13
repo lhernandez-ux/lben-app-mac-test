@@ -98,5 +98,17 @@ class App(ctk.CTk):
             from ui.pages.m2_resultados import M2ResultadosPage
             return M2ResultadosPage(self)
 
+        elif destino == "m3_config":
+            from ui.pages.m3_config import M3ConfigPage
+            return M3ConfigPage(self)
+
+        elif destino == "m3_carga":
+            from ui.pages.m3_carga import M3CargaPage
+            return M3CargaPage(self)
+
+        elif destino == "m3_resultados":
+            from ui.pages.m3_resultados import M3ResultadosPage
+            return M3ResultadosPage(self)
+
         else:
             raise ValueError(f"Destino desconocido: {destino}")
