@@ -100,13 +100,31 @@ class HomePage(ctk.CTkFrame):
             contenido, fg_color=COLORS.bg_main, corner_radius=0
         )
         header.grid(row=0, column=0, sticky="ew", padx=48, pady=(40, 0))
+        header.grid_columnconfigure(0, weight=1)
+
+        # Contenedor para Título + Botón Guía
+        top_row = ctk.CTkFrame(header, fg_color="transparent")
+        top_row.pack(fill="x")
 
         ctk.CTkLabel(
-            header,
+            top_row,
             text="Bienvenido",
             font=(FONTS.family, FONTS.size_title, "bold"),
             text_color=COLORS.primary
-        ).pack(anchor="w")
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            top_row,
+            text="📖 Guía de Usuario",
+            font=(FONTS.family, FONTS.size_sm, "bold"),
+            fg_color=COLORS.accent,
+            text_color=COLORS.primary,
+            hover_color="#D4E800",
+            corner_radius=DIMS.button_radius,
+            width=150,
+            height=32,
+            command=lambda: self.app.navegar("guia_usuario")
+        ).pack(side="right")
 
         ctk.CTkLabel(
             header,
@@ -170,7 +188,7 @@ class HomePage(ctk.CTkFrame):
 
         ctk.CTkButton(
             footer,
-            text="📂  Abrir Proyecto o Seguimiento Existente",
+            text="📄  Informe UPME Resolución 016 de 2024",
             font=(FONTS.family, FONTS.size_md),
             fg_color=COLORS.bg_card,
             text_color=COLORS.primary,
@@ -179,13 +197,13 @@ class HomePage(ctk.CTkFrame):
             border_color=COLORS.border,
             corner_radius=DIMS.button_radius,
             height=44,
-            command=lambda: self.app.navegar("exploratorio_carga")
+            command=lambda: self.app.navegar("informe_upme")
         ).grid(row=0, column=0, sticky="ew")
 
         # Copyright
         ctk.CTkLabel(
             footer,
-            text="© 2026 — Herramienta de análisis energético  |  UPME 016/2024",
+            text="© 2026 — Herramienta de análisis energético",
             font=(FONTS.family, FONTS.size_xs),
             text_color=COLORS.text_secondary
         ).grid(row=1, column=0, pady=(8, 0))
