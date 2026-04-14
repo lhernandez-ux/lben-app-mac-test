@@ -570,11 +570,16 @@ class M2ResultadosPage(ctk.CTkFrame):
         ax.set_facecolor("#F8FAF9")
         fechas = dfm["FechaStr"].tolist()
         cusum  = pd.to_numeric(dfm["CUSUM_kWh"], errors="coerce").tolist()
-        # Color por tramo según pendiente (ascendente=rojo, descendente=verde)
+        años   = dfm["Fecha_DT"].dt.year.tolist()
+        # Color por tramo según pendiente y EVITAR unión Dic-Ene
         for i in range(1, len(fechas)):
-            # Si el valor actual es mayor al anterior, la pendiente sube (mal -> rojo)
-            c = COLORS.danger if cusum[i] > cusum[i-1] else COLORS.success
-            ax.plot(fechas[i-1:i+1], cusum[i-1:i+1], color=c, linewidth=2)
+            if años[i] == años[i-1]:
+                # Si el valor actual es mayor al anterior, la pendiente sube (mal -> rojo)
+                c = COLORS.danger if cusum[i] > cusum[i-1] else COLORS.success
+                ax.plot(fechas[i-1:i+1], cusum[i-1:i+1], color=c, linewidth=2, marker="o", markersize=4)
+            else:
+                # Punto inicial del nuevo ciclo
+                ax.plot([fechas[i]], [cusum[i]], color=COLORS.primary, marker="o", markersize=4)
         ax.axhline(0, color=COLORS.primary, linestyle="--", alpha=0.5)
         ax.set_ylabel("CUSUM (kWh)")
         ax.grid(True, linestyle=":", alpha=0.4)
@@ -616,20 +621,25 @@ class M2ResultadosPage(ctk.CTkFrame):
         try:
             fechas = dfm["FechaStr"].tolist()
             cusum  = pd.to_numeric(dfm["CUSUM_kWh"], errors="coerce").tolist()
-            colors = []
-            for i in range(len(cusum)):
-                if i == 0:
-                    colors.append(COLORS.success if cusum[i] <= 0 else COLORS.danger)
-                else:
-                    colors.append(COLORS.danger if cusum[i] > cusum[i-1] else COLORS.success)
-            
+            años   = dfm["Fecha_DT"].dt.year.tolist()
             fig = go.Figure()
-            # Línea con marcadores coloreados según pendiente
-            fig.add_trace(go.Scatter(
-                x=fechas, y=cusum, mode="lines+markers",
-                line=dict(color=COLORS.primary, width=2),
-                marker=dict(color=colors, size=8, line=dict(color="white", width=1)),
-                name="CUSUM (kWh)"))
+            
+            for i in range(len(cusum)-1):
+                # Solo dibujar segmento si es el mismo año
+                if años[i] == años[i+1]:
+                    c = 'rgb(44, 160, 44)' if cusum[i+1] <= cusum[i] else 'rgb(214, 39, 40)'
+                    fig.add_trace(go.Scatter(
+                        x=[fechas[i], fechas[i+1]], 
+                        y=[cusum[i], cusum[i+1]],
+                        mode="lines+markers", 
+                        line=dict(color=c, width=4), 
+                        showlegend=False
+                    ))
+                else:
+                    # Punto final de año
+                    fig.add_trace(go.Scatter(x=[fechas[i]], y=[cusum[i]], mode='markers', 
+                                             marker=dict(color='gray', size=8), showlegend=False))
+            
             fig.add_hline(y=0, line_dash="dash", line_color=COLORS.primary, opacity=0.5)
             fig.update_layout(title="CUSUM — Desempeño Energético Acumulado — Interactivo",
                               xaxis_title="Período", yaxis_title="CUSUM (kWh)",

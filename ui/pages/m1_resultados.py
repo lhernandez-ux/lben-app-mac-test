@@ -487,12 +487,18 @@ class M1ResultadosPage(ctk.CTkFrame):
         y_cusum = self.df_mon['CUSUM_kWh'].values
         x_indices = range(len(y_cusum))
         
-        # Dibujar por segmentos para aplicar color ahorro/sobreconsumo
+        def get_yr(f):
+            try: return int(str(f).split("-")[-1])
+            except: return 0
+
+        # Dibujar por segmentos para aplicar color ahorro/sobreconsumo + Ruptura Dic-Ene
         for i in range(len(y_cusum)-1):
-            # AHORRO (Verde): si el CUSUM baja (más negativo) o se mantiene abajo
-            # SOBRECONSUMO (Rojo): si el CUSUM sube
-            color = COLORS.success if y_cusum[i+1] <= y_cusum[i] else COLORS.danger
-            ax2.plot([fechas.iloc[i], fechas.iloc[i+1]], [y_cusum[i], y_cusum[i+1]], color=color, linewidth=3, marker='o', markersize=4)
+            if get_yr(fechas.iloc[i]) == get_yr(fechas.iloc[i+1]):
+                color = COLORS.success if y_cusum[i+1] <= y_cusum[i] else COLORS.danger
+                ax2.plot([fechas.iloc[i], fechas.iloc[i+1]], [y_cusum[i], y_cusum[i+1]], color=color, linewidth=3, marker='o', markersize=4)
+            else:
+                # Solo el punto del nuevo ciclo
+                ax2.plot([fechas.iloc[i+1]], [y_cusum[i+1]], color=COLORS.primary, marker='o', markersize=4)
 
         ax2.axhline(0, color=COLORS.text_secondary, linestyle='-', alpha=0.5)
         # ax2.set_title("Desempeño Energético Acumulado (CUSUM kWh)", fontsize=12, fontweight='bold')
@@ -528,9 +534,16 @@ class M1ResultadosPage(ctk.CTkFrame):
             fechas = self.df_mon['Fecha']
             y_cusum = self.df_mon['CUSUM_kWh'].values
             
+            def get_yr(f):
+                try: return int(str(f).split("-")[-1])
+                except: return 0
+
             for i in range(len(y_cusum)-1):
-                color = 'rgb(44, 160, 44)' if y_cusum[i+1] <= y_cusum[i] else 'rgb(214, 39, 40)'
-                fig.add_trace(go.Scatter(x=[fechas.iloc[i], fechas.iloc[i+1]], y=[y_cusum[i], y_cusum[i+1]], mode='lines+markers', line=dict(color=color, width=4), showlegend=False))
+                if get_yr(fechas.iloc[i]) == get_yr(fechas.iloc[i+1]):
+                    color = 'rgb(44, 160, 44)' if y_cusum[i+1] <= y_cusum[i] else 'rgb(214, 39, 40)'
+                    fig.add_trace(go.Scatter(x=[fechas.iloc[i], fechas.iloc[i+1]], y=[y_cusum[i], y_cusum[i+1]], mode='lines+markers', line=dict(color=color, width=4), showlegend=False))
+                else:
+                    fig.add_trace(go.Scatter(x=[fechas.iloc[i+1]], y=[y_cusum[i+1]], mode='markers', marker=dict(color='gray', size=8), showlegend=False))
 
             fig.add_hline(y=0, line_dash="dash", line_color="gray")
             fig.update_layout(title="CUSUM Acumulado (kWh)", xaxis_title="Fecha", yaxis_title="kWh Acumulado", template="plotly_white")

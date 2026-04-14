@@ -268,19 +268,15 @@ class M3ResultadosPage(ctk.CTkFrame):
         # Columna Afectacion si existe
         col_afec = "Afectacion" if "Afectacion" in dfm.columns else None
         dfm["Ajustado"] = dfm["_consumo_num"] + dfm[col_afec].apply(_clean_val) if col_afec else dfm["_consumo_num"]
-        dfm["lben_mes"] = dfm["lben_mes"].apply(_clean_val)
-
-        # El filtrado ahora se maneja estrictamente desde la lectura del Excel (io_excel.py)
-        # para asegurar paridad total con los datos ingresados.
-        dfm = dfm.reset_index(drop=True)
-
-        dfm["Desemp"] = dfm["Ajustado"] - dfm["lben_mes"]
-        dfm["CUSUM"] = dfm["Desemp"].cumsum()
-
         dfm["Fecha_DT"] = dfm["Fecha"].apply(safe_to_datetime)
         dfm["FechaStr"] = dfm["Fecha_DT"].apply(fmt_fecha_es)
         # Filtrar solo filas con fecha válida
         dfm = dfm[dfm["Fecha_DT"].notna()].reset_index(drop=True)
+        dfm["lben_mes"] = dfm["lben_mes"].apply(_clean_val)
+
+        dfm["Desemp"] = dfm["Ajustado"] - dfm["lben_mes"]
+        # CUSUM anual: Agrupar por el año de Fecha_DT y aplicar cumsum individualmente
+        dfm["CUSUM"] = dfm.groupby(dfm["Fecha_DT"].dt.year)["Desemp"].cumsum()
 
         if dfm.empty:
             ctk.CTkLabel(scroll, text="No hay datos válidos de monitoreo.", font=(FONTS.family, 14)).pack(pady=50)
@@ -395,10 +391,16 @@ class M3ResultadosPage(ctk.CTkFrame):
         
         fechas = dfm["FechaStr"].tolist()
         cusum = dfm["CUSUM"].tolist()
+        años_list = dfm["Fecha_DT"].dt.year.tolist()
         
         for i in range(1, len(cusum)):
-            c = COLORS.success if cusum[i] <= cusum[i-1] else COLORS.danger
-            ax.plot(fechas[i-1:i+1], cusum[i-1:i+1], color=c, linewidth=2.5)
+            # Solo dibujar segmento si es el mismo año
+            if años_list[i] == años_list[i-1]:
+                c = COLORS.success if cusum[i] <= cusum[i-1] else COLORS.danger
+                ax.plot(fechas[i-1:i+1], cusum[i-1:i+1], color=c, linewidth=2.5, marker="o", markersize=4)
+            else:
+                # Punto inicial del nuevo ciclo
+                ax.plot([fechas[i]], [cusum[i]], color=COLORS.primary, marker="o", markersize=4)
             
         ax.axhline(0, color=COLORS.primary, alpha=0.3, linestyle=":")
         plt.xticks(rotation=30, ha="right", fontsize=8); plt.tight_layout()
@@ -415,16 +417,22 @@ class M3ResultadosPage(ctk.CTkFrame):
                 fig.update_layout(title="Comparativa Consumo vs Línea Base", xaxis_title="Mes", yaxis_title="kWh")
             else:
                 y_vals = dfm["CUSUM"].values
-                # Copiar la lógica exacta de M1 para colores en CUSUM
+                años_list = dfm["Fecha_DT"].dt.year.tolist()
+                # Copiar la lógica exacta de M1 para colores en CUSUM + Ruptura Dic-Ene
                 for i in range(len(y_vals)-1):
-                    color = 'rgb(44, 160, 44)' if y_vals[i+1] <= y_vals[i] else 'rgb(214, 39, 40)'
-                    fig.add_trace(go.Scatter(
-                        x=[fechas[i], fechas[i+1]], 
-                        y=[y_vals[i], y_vals[i+1]], 
-                        mode='lines+markers', 
-                        line=dict(color=color, width=4), 
-                        showlegend=False
-                    ))
+                    # Solo dibujar línea si es el mismo año
+                    if años_list[i] == años_list[i+1]:
+                        color = 'rgb(44, 160, 44)' if y_vals[i+1] <= y_vals[i] else 'rgb(214, 39, 40)'
+                        fig.add_trace(go.Scatter(
+                            x=[fechas[i], fechas[i+1]], 
+                            y=[y_vals[i], y_vals[i+1]], 
+                            mode='lines+markers', 
+                            line=dict(color=color, width=4), 
+                            showlegend=False
+                        ))
+                    else:
+                        # Punto solitario para el fin de año / inicio año nuevo
+                        fig.add_trace(go.Scatter(x=[fechas[i]], y=[y_vals[i]], mode='markers', marker=dict(color='gray', size=8), showlegend=False))
                 
                 fig.add_hline(y=0, line_dash="dash", line_color="gray")
                 fig.update_layout(title="Desempeño Energético Acumulado (CUSUM)", xaxis_title="Mes", yaxis_title="kWh Acumulado")
