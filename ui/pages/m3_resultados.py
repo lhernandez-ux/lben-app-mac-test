@@ -25,7 +25,7 @@ YEAR_COLORS = ["#2196F3", "#FF9800", "#4CAF50", "#E91E63", "#9C27B0"]
 MES_NUM_ES = {1:"Ene", 2:"Feb", 3:"Mar", 4:"Abr", 5:"May", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dic"}
 
 def safe_to_datetime(val):
-    MESES_ES_EN = {'Ene':'Jan', 'Feb':'Feb', 'Mar':'Mar', 'Abr':'Apr', 'May':'May', 'Jun':'Jun', 'Jul':'Jul', 'Ago':'Aug', 'Sep':'Sep', 'Oct':'Oct', 'Nov':'Nov', 'Dic':'Dic'}
+    MESES_ES_EN = {'Ene':'Jan', 'Feb':'Feb', 'Mar':'Mar', 'Abr':'Apr', 'May':'May', 'Jun':'Jun', 'Jul':'Jul', 'Ago':'Aug', 'Sep':'Sep', 'Oct':'Oct', 'Nov':'Nov', 'Dic':'Dec'}
     if isinstance(val, str):
         for es, en in MESES_ES_EN.items():
             if es in val: val = val.replace(es, en)
