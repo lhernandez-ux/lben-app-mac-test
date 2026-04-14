@@ -270,8 +270,9 @@ class M3ResultadosPage(ctk.CTkFrame):
         dfm["Ajustado"] = dfm["_consumo_num"] + dfm[col_afec].apply(_clean_val) if col_afec else dfm["_consumo_num"]
         dfm["lben_mes"] = dfm["lben_mes"].apply(_clean_val)
 
-        # FILTRAR: solo filas con consumo real (evitar fechas vacías hasta 2050)
-        dfm = dfm[dfm["_consumo_num"] > 0].reset_index(drop=True)
+        # El filtrado ahora se maneja estrictamente desde la lectura del Excel (io_excel.py)
+        # para asegurar paridad total con los datos ingresados.
+        dfm = dfm.reset_index(drop=True)
 
         dfm["Desemp"] = dfm["Ajustado"] - dfm["lben_mes"]
         dfm["CUSUM"] = dfm["Desemp"].cumsum()
@@ -285,6 +286,20 @@ class M3ResultadosPage(ctk.CTkFrame):
             ctk.CTkLabel(scroll, text="No hay datos válidos de monitoreo.", font=(FONTS.family, 14)).pack(pady=50)
             return
 
+        # Detectar columnas de Tarifa y Factor dinámicamente
+        col_tarifa = None
+        col_factor = None
+        for c in dfm.columns:
+            cl = c.lower()
+            if "tarifa" in cl: col_tarifa = c
+            if "factor" in cl and "emisi" in cl: col_factor = c
+
+        # Calcular Ahorros Acumulados usando las columnas detectadas
+        dfm["Eco_Mes"] = dfm["Desemp"] * (dfm[col_tarifa].apply(_clean_val) if col_tarifa else 0)
+        dfm["Amb_Mes"] = dfm["Desemp"] * (dfm[col_factor].apply(_clean_val) if col_factor else 0)
+        dfm["Eco_Acum"] = dfm["Eco_Mes"].cumsum()
+        dfm["Amb_Acum"] = dfm["Amb_Mes"].cumsum()
+
         # ── Tabla con Doble Scroll ──
         ctk.CTkLabel(scroll, text="DATOS DE MONITOREO", font=(FONTS.family, 14, "bold"),
                      text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0,10))
@@ -295,7 +310,7 @@ class M3ResultadosPage(ctk.CTkFrame):
         inner = ctk.CTkFrame(h_scroll, fg_color="transparent")
         inner.pack(fill="both")
 
-        headers = ["Fecha", "Ajustado", "LBEn", "D. Mensual", "CUSUM", "Avance Pot.", "Avance Meta", "Eco ($)", "Amb (CO2)"]
+        headers = ["Fecha", "Ajustado", "LBEn", "D. Mensual", "CUSUM", "Avance Pot.", "Eco ($)", "Eco Acum.", "Amb (CO2)", "Amb Acum."]
         col_w = 110
         h_f = ctk.CTkFrame(inner, fg_color=COLORS.primary, height=35)
         h_f.pack(fill="x")
@@ -315,14 +330,6 @@ class M3ResultadosPage(ctk.CTkFrame):
             rf.pack(fill="x")
             
             av_pot  = f"{(row['CUSUM']/pot_anual)*100*-1:.1f}%" if pot_anual != 0 else "---"
-            av_meta = f"{(row['CUSUM']/meta_anual)*100*-1:.1f}%" if meta_anual != 0 else "---"
-            
-            # Intentar leer tarifa/factor de la fila si existen
-            t_row = row.get('Tarifa', tarifa)
-            f_row = row.get('Factor Emisión', factor_em)
-            
-            eco_mensual = row['Desemp'] * t_row
-            amb_mensual = row['Desemp'] * f_row
             
             vals = [
                 row['FechaStr'], 
@@ -330,8 +337,9 @@ class M3ResultadosPage(ctk.CTkFrame):
                 f"{row['lben_mes']:,.0f}",
                 f"{row['Desemp']:,.0f}", 
                 f"{row['CUSUM']:,.0f}", 
-                av_pot, av_meta,
-                f"${-eco_mensual:,.0f}", f"{-amb_mensual:,.1f}"
+                av_pot,
+                f"${-row['Eco_Mes']:,.0f}", f"${-row['Eco_Acum']:,.0f}",
+                f"{-row['Amb_Mes']:,.1f}", f"{-row['Amb_Acum']:,.1f}"
             ]
             for i, v in enumerate(vals):
                 color = COLORS.success if i==3 and row['Desemp']<=0 else COLORS.danger if i==3 else COLORS.text_primary
@@ -342,9 +350,26 @@ class M3ResultadosPage(ctk.CTkFrame):
         self._chart_real_vs_base(scroll, dfm)
         self._chart_cusum(scroll, dfm)
 
-    def _chart_real_vs_base(self, parent, dfm):
+    def _chart_container(self, parent, title, tipo, dfm):
+        """Helper para crear el contenedor con título a la izq y botón a la der."""
         f = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12, border_width=1, border_color=COLORS.border)
-        f.pack(fill="x", pady=20)
+        f.pack(fill="x", pady=10)
+        
+        # Header del gráfico
+        h_f = ctk.CTkFrame(f, fg_color="transparent")
+        h_f.pack(fill="x", padx=15, pady=(15, 5))
+        
+        ctk.CTkLabel(h_f, text=title, font=(FONTS.family, 13, "bold"), text_color=COLORS.primary, anchor="w").pack(side="left")
+        
+        ctk.CTkButton(h_f, text="🌐 Ver interactivo", font=(FONTS.family, 10, "bold"),
+                      fg_color="transparent", text_color=COLORS.primary, border_width=1, border_color=COLORS.primary,
+                      width=100, height=26,
+                      command=lambda: self._abrir_grafica_interactiva(dfm, tipo)).pack(side="right")
+        
+        return f
+
+    def _chart_real_vs_base(self, parent, dfm):
+        f = self._chart_container(parent, "Seguimiento Energético: Real vs Meta", "monto", dfm)
         fig, ax = plt.subplots(figsize=(10, 4), facecolor=COLORS.bg_card)
         ax.set_facecolor("#F8FAF9")
         
@@ -361,15 +386,10 @@ class M3ResultadosPage(ctk.CTkFrame):
         
         ax.legend(fontsize=8, loc="upper right")
         plt.xticks(rotation=30, ha="right", fontsize=8); plt.tight_layout()
-        FigureCanvasTkAgg(fig, master=f).get_tk_widget().pack(fill="both", padx=10, pady=10)
-        
-        ctk.CTkButton(f, text="🌐 Ver Interactivo en Navegador", font=(FONTS.family, 11, "bold"),
-                      fg_color="transparent", text_color=COLORS.primary, border_width=1, border_color=COLORS.primary,
-                      command=lambda: self._abrir_grafica_interactiva(dfm, "monto")).pack(pady=(0, 15))
+        FigureCanvasTkAgg(fig, master=f).get_tk_widget().pack(fill="both", padx=10, pady=(0, 10))
 
     def _chart_cusum(self, parent, dfm):
-        f = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12, border_width=1, border_color=COLORS.border)
-        f.pack(fill="x", pady=(0, 20))
+        f = self._chart_container(parent, "Desempeño Energético: CUSUM", "cusum", dfm)
         fig, ax = plt.subplots(figsize=(10, 4), facecolor=COLORS.bg_card)
         ax.set_facecolor("#F8FAF9")
         
@@ -381,13 +401,8 @@ class M3ResultadosPage(ctk.CTkFrame):
             ax.plot(fechas[i-1:i+1], cusum[i-1:i+1], color=c, linewidth=2.5)
             
         ax.axhline(0, color=COLORS.primary, alpha=0.3, linestyle=":")
-        ax.set_title("CUSUM — Desempeño Energético Acumulado", fontdict={"size":10, "weight":"bold"})
         plt.xticks(rotation=30, ha="right", fontsize=8); plt.tight_layout()
-        FigureCanvasTkAgg(fig, master=f).get_tk_widget().pack(fill="both", padx=10, pady=10)
-        
-        ctk.CTkButton(f, text="🌐 Ver Interactivo en Navegador", font=(FONTS.family, 11, "bold"),
-                      fg_color="transparent", text_color=COLORS.primary, border_width=1, border_color=COLORS.primary,
-                      command=lambda: self._abrir_grafica_interactiva(dfm, "cusum")).pack(pady=(0, 15))
+        FigureCanvasTkAgg(fig, master=f).get_tk_widget().pack(fill="both", padx=10, pady=(0, 10))
 
     def _abrir_grafica_interactiva(self, dfm, tipo):
         try:
@@ -399,11 +414,20 @@ class M3ResultadosPage(ctk.CTkFrame):
                 fig.add_trace(go.Scatter(x=fechas, y=dfm["Ajustado"], name="Consumo Ajustado", mode='lines+markers', line=dict(color='#D32F2F')))
                 fig.update_layout(title="Comparativa Consumo vs Línea Base", xaxis_title="Mes", yaxis_title="kWh")
             else:
-                y_vals = dfm["CUSUM"].tolist()
-                colors = ['#2E7D32' if y_vals[i] <= y_vals[i-1] else '#D32F2F' for i in range(1, len(y_vals))]
-                # Plotly scatter individual segments for coloring or just a single line
-                fig.add_trace(go.Scatter(x=fechas, y=y_vals, name="CUSUM", line=dict(color='#2196F3', width=3)))
-                fig.update_layout(title="CUSUM — Desempeño Energético Acumulado", xaxis_title="Mes", yaxis_title="kWh Acumulado")
+                y_vals = dfm["CUSUM"].values
+                # Copiar la lógica exacta de M1 para colores en CUSUM
+                for i in range(len(y_vals)-1):
+                    color = 'rgb(44, 160, 44)' if y_vals[i+1] <= y_vals[i] else 'rgb(214, 39, 40)'
+                    fig.add_trace(go.Scatter(
+                        x=[fechas[i], fechas[i+1]], 
+                        y=[y_vals[i], y_vals[i+1]], 
+                        mode='lines+markers', 
+                        line=dict(color=color, width=4), 
+                        showlegend=False
+                    ))
+                
+                fig.add_hline(y=0, line_dash="dash", line_color="gray")
+                fig.update_layout(title="Desempeño Energético Acumulado (CUSUM)", xaxis_title="Mes", yaxis_title="kWh Acumulado")
 
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
             fig.write_html(tmp.name)

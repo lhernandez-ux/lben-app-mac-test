@@ -234,24 +234,29 @@ def _leer_hoja_datos_generica(ws):
             headers.append(str(v).strip())
         else:
             break
-    datos = []
+            
+    datos_completos = []
     for r in range(8, 2000):
         fecha_v = ws.cell(row=r, column=2).value
-        # Si no hay fecha, paramos inmediatamente
         if not fecha_v: break
         
-        # Si hay fecha pero el consumo (columna 3) está vacío, paramos de leer datos reales
-        # Esto evita cargar los 313 meses de la plantilla si solo hay 36 de data.
-        consumo_v = ws.cell(row=r, column=3).value
-        if consumo_v is None:
-            break
-            
         row = {"Fecha": str(fecha_v)}
         for i, h in enumerate(headers[1:]):
             val = ws.cell(row=r, column=3+i).value
             row[h] = _clean_num(val)
-        datos.append(row)
-    return pd.DataFrame(datos)
+        datos_completos.append(row)
+    
+    # TRUNCARE: Buscamos el último registro que tenga un consumo (Headers[1]) > 0
+    # Esto elimina las filas vacías de la plantilla hasta 2050 sin romper el flujo.
+    col_consumo = headers[1]
+    last_idx = -1
+    for i, d in enumerate(datos_completos):
+        if d.get(col_consumo, 0) > 0:
+            last_idx = i
+    
+    if last_idx != -1:
+        return pd.DataFrame(datos_completos[:last_idx+1])
+    return pd.DataFrame()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # C — ESCRITURA DE RESULTADOS
