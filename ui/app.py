@@ -86,6 +86,14 @@ class App(ctk.CTk):
             from ui.pages.m1_resultados import M1ResultadosPage
             return M1ResultadosPage(self)
 
+        elif destino == "guia_usuario":
+            from ui.pages.guia_usuario import GuiaUsuarioPage
+            return GuiaUsuarioPage(self)
+
+        elif destino == "informe_upme":
+            from ui.pages.informe_upme import InformeUPMEPage
+            return InformeUPMEPage(self)
+
         elif destino == "m2_config":
             from ui.pages.m2_config import M2ConfigPage
             return M2ConfigPage(self)

@@ -267,18 +267,60 @@ def _leer_hoja_datos_generica(ws):
 # C — ESCRITURA DE RESULTADOS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def escribir_resultados_exploratorios(path, rec, just, tabla):
-    wb = load_workbook(path)
-    ws_mod = wb["Modelo_LBEn"]
-    ws_mod["C5"] = rec
-    ws_mod["C7"] = just
-    for i, row in enumerate(tabla):
-        f = 13 + i
-        ws_mod.cell(row=f, column=2, value=row.get("variable"))
-        ws_mod.cell(row=f, column=3, value=row.get("r_pearson"))
-        ws_mod.cell(row=f, column=4, value=row.get("p_valor"))
-    wb.save(path)
-    return True
+def escribir_resultados_exploratorios(path, rec, just, tabla, config):
+    try:
+        wb = load_workbook(path)
+        
+        # 1. Hoja de Instrucciones (Configuración)
+        if "Instrucciones" in wb.sheetnames:
+            ws_inst = wb["Instrucciones"]
+            ws_inst["C11"] = config.get("var_dep", "No definida")
+            ws_inst["C12"] = ", ".join(config.get("vars_ind", []))
+            ws_inst["C13"] = f"{config.get('f_ini','?')} a {config.get('f_fin','?')}"
+
+        # 2. Hoja Modelo_LBEn
+        ws_mod = wb["Modelo_LBEn"]
+        ws_mod["C5"] = rec
+        ws_mod["C6"] = "Mayor correlación estadística (Pearson r) y p-valor < 0.05"
+        ws_mod["C7"] = just
+        
+        # Tabla de resultados (Ranking) - comienza en fila 12
+        # B=Var, C=r, D=p, E=Sig, F=Grado, G=Interpretacion, H=Sugerencia
+        for i, row in enumerate(tabla):
+            f = 12 + i
+            r_val = row.get("r_pearson", 0)
+            p_val = row.get("p_valor", 1.0)
+            sig = "Sí" if p_val < 0.05 else "No"
+            
+            # Grado de influencia
+            r_abs = abs(r_val)
+            if r_abs >= 0.8: grado = "Muy Alto"
+            elif r_abs >= 0.6: grado = "Alto"
+            elif r_abs >= 0.4: grado = "Moderado"
+            else: grado = "Bajo"
+            
+            # Interpretación
+            interp = row.get("interpretacion", "")
+            if not interp:
+                interp = "Recomendada para el modelo" if sig == "Sí" and r_abs > 0.6 else "Poca influencia detectada"
+                if sig == "No": interp = "No representativa estadísticamente"
+
+            # Sugerencia (viene del motor, o fallback)
+            sug = row.get("sugerencia", "Incluir" if sig == "Sí" else "Excluir")
+
+            ws_mod.cell(row=f, column=2, value=row.get("variable"))
+            ws_mod.cell(row=f, column=3, value=r_val)
+            ws_mod.cell(row=f, column=4, value=p_val)
+            ws_mod.cell(row=f, column=5, value=sig)
+            ws_mod.cell(row=f, column=6, value=grado)
+            ws_mod.cell(row=f, column=7, value=interp)
+            ws_mod.cell(row=f, column=8, value=sug)
+            
+        wb.save(path)
+        return True
+    except Exception as e:
+        print(f"Error escribiendo Excel: {e}")
+        return False
 
 def escribir_resultados_m1(path, df_lben, df_mon, df_b_f, df_excl, meta, config):
     wb = load_workbook(path)
@@ -356,8 +398,15 @@ def escribir_resultados_m3(path, res, config):
         vif_val = ct['vif'][i]
         try:
             if vif_val is not None and not np.isnan(float(vif_val)):
-                ws_diag[f"F{f}"].value = vif_val
-                ws_diag[f"F{f}"].number_format = fmt_num
+                celda_vif = ws_diag[f"F{f}"]
+                celda_vif.value = vif_val
+                celda_vif.number_format = fmt_num
+                
+                # Alerta visual si VIF > 10 (Color Rojo)
+                if float(vif_val) > 10:
+                    celda_vif.font = Font(color="FF0000", bold=True)
+                else:
+                    celda_vif.font = Font(color="000000", bold=False)
         except (TypeError, ValueError):
             pass
 

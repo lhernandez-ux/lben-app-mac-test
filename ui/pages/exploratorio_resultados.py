@@ -216,17 +216,20 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
             ctk.CTkLabel(f_out, text="Datos Limpios", font=(FONTS.family, 10, "bold"), text_color=COLORS.success).pack()
             ctk.CTkLabel(f_out, text="No se detectaron valores inusuales en el periodo.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
 
-        # --- B. REDUNDANCIA ---
+        # --- B. COLINEALIDAD ---
         colin = diag["colinealidad"]
         color_col = COLORS.warning if colin else COLORS.success
         f_col = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=color_col)
         f_col.grid(row=0, column=1, padx=4, sticky="nsew")
 
-        ctk.CTkLabel(f_col, text="Independencia", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        ctk.CTkLabel(f_col, text="Colinealidad", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
         if colin:
-            msg = colin[0]["mensaje"]
-            ctk.CTkLabel(f_col, text="REDUNDANCIA", font=(FONTS.family, 10, "bold"), text_color=COLORS.warning).pack()
-            ctk.CTkLabel(f_col, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200).pack(padx=10, pady=(4, 8))
+            v1, v2 = colin[0]["variables"]
+            msg_col = (f"'{v1}' y '{v2}' están altamente correlacionadas entre sí.\n"
+                       f"Al ser colineales, se sugiere conservar solo la de mayor impacto y excluir la otra\n"
+                       f"en la hoja 'Periodo_Análisis' antes de re-procesar.")
+            ctk.CTkLabel(f_col, text="COLINEALIDAD", font=(FONTS.family, 10, "bold"), text_color=COLORS.warning).pack()
+            ctk.CTkLabel(f_col, text=msg_col, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200, justify="left").pack(padx=10, pady=(4, 8))
         else:
             ctk.CTkLabel(f_col, text="Óptima", font=(FONTS.family, 10, "bold"), text_color=COLORS.success).pack()
             ctk.CTkLabel(f_col, text="Las variables aportan información única y valiosa.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
@@ -279,22 +282,20 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         card = self._card(parent, fila, "🔗  Influencia de las Variables (Pearson)")
 
-        # Encabezados
-        cols = ["Variable Independiente", "r (Pearson)",
-                "p-valor", "¿Significativa?", "Grado", "Interpretación"]
-        anchos = [180, 90, 90, 110, 120, 0]
+        # Encabezados (nueva columna: Sugerencia)
+        cols   = ["Variable Independiente", "r (Pearson)", "p-valor", "¿Significativa?", "Grado", "Interpretación", "Sugerencia"]
+        anchos = [170, 90, 90, 100, 110, 0, 100]
 
         enc = ctk.CTkFrame(card, fg_color=COLORS.primary, corner_radius=6)
         enc.pack(fill="x", padx=16, pady=(0, 4))
 
         for ci, (col, ancho) in enumerate(zip(cols, anchos)):
-            enc.grid_columnconfigure(ci, weight=1 if ancho == 0 else 0,
-                                     minsize=ancho)
+            enc.grid_columnconfigure(ci, weight=1, minsize=ancho)
             ctk.CTkLabel(
                 enc, text=col,
                 font=(FONTS.family, FONTS.size_xs, "bold"),
                 text_color="white", anchor="center"
-            ).grid(row=0, column=ci, sticky="ew", padx=6, pady=8)
+            ).grid(row=0, column=ci, sticky="ew", padx=6, pady=10)
 
         # Filas
         for ri, res in enumerate(self._resultados):
@@ -303,28 +304,40 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
             fila_frame.pack(fill="x", padx=16, pady=1)
 
             for ci, ancho in enumerate(anchos):
-                fila_frame.grid_columnconfigure(
-                    ci, weight=1 if ancho == 0 else 0, minsize=ancho
-                )
+                fila_frame.grid_columnconfigure(ci, weight=1, minsize=ancho)
 
-            ctk.CTkLabel(fila_frame, text=res["variable"], font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary, anchor="center").grid(row=0, column=0, sticky="ew", padx=6, pady=6)
+            # Col 0: Variable
+            ctk.CTkLabel(fila_frame, text=res["variable"], font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary, anchor="center").grid(row=0, column=0, sticky="ew", padx=6, pady=8)
 
+            # Col 1: r de Pearson
             r_val = res["r_pearson"]
             r_txt = f"{r_val:+.4f}" if r_val is not None else "—"
-            r_color = self._color_r(r_val)
-            ctk.CTkLabel(fila_frame, text=r_txt, font=(FONTS.family_mono, FONTS.size_xs, "bold"), text_color=r_color, anchor="center").grid(row=0, column=1, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=r_txt, font=(FONTS.family_mono, FONTS.size_xs, "bold"), text_color=self._color_r(r_val), anchor="center").grid(row=0, column=1, sticky="ew", padx=6, pady=8)
 
+            # Col 2: p-valor
             p_val = res["p_valor"]
             p_txt = f"{p_val:.4f}" if p_val is not None else "—"
             p_color = COLORS.success if res["significativa"] else COLORS.danger
-            ctk.CTkLabel(fila_frame, text=p_txt, font=(FONTS.family_mono, FONTS.size_xs), text_color=p_color, anchor="center").grid(row=0, column=2, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=p_txt, font=(FONTS.family_mono, FONTS.size_xs), text_color=p_color, anchor="center").grid(row=0, column=2, sticky="ew", padx=6, pady=8)
 
+            # Col 3: Significativa
             sig_txt   = "✅ Sí" if res["significativa"] else "❌ No"
             sig_color = COLORS.success if res["significativa"] else COLORS.danger
-            ctk.CTkLabel(fila_frame, text=sig_txt, font=(FONTS.family, FONTS.size_xs, "bold"), text_color=sig_color, anchor="center").grid(row=0, column=3, sticky="ew", padx=6, pady=6)
+            ctk.CTkLabel(fila_frame, text=sig_txt, font=(FONTS.family, FONTS.size_xs, "bold"), text_color=sig_color, anchor="center").grid(row=0, column=3, sticky="ew", padx=6, pady=8)
 
-            ctk.CTkLabel(fila_frame, text=res["grado"], font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary, anchor="center").grid(row=0, column=4, sticky="ew", padx=6, pady=6)
-            ctk.CTkLabel(fila_frame, text=res["interpretacion"], font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_primary, anchor="w", wraplength=300, justify="left").grid(row=0, column=5, sticky="ew", padx=6, pady=6)
+            # Col 4: Grado
+            ctk.CTkLabel(fila_frame, text=res["grado"], font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary, anchor="center").grid(row=0, column=4, sticky="ew", padx=6, pady=8)
+
+            # Col 5: Interpretación
+            ctk.CTkLabel(fila_frame, text=res.get("interpretacion", ""), font=(FONTS.family, 11), text_color=COLORS.text_primary, anchor="w", wraplength=280, justify="left").grid(row=0, column=5, sticky="ew", padx=10, pady=8)
+
+            # Col 6: Sugerencia (icono + color)
+            sug = res.get("sugerencia", "Incluir")
+            if sug == "Incluir":
+                sug_txt, sug_color = "✔ Incluir", COLORS.success
+            else:
+                sug_txt, sug_color = "✗ Excluir", COLORS.danger
+            ctk.CTkLabel(fila_frame, text=sug_txt, font=(FONTS.family, FONTS.size_xs, "bold"), text_color=sug_color, anchor="center").grid(row=0, column=6, sticky="ew", padx=6, pady=8)
 
         ctk.CTkFrame(card, fg_color="transparent", height=12).pack()
 
@@ -470,7 +483,13 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
             from tkinter import filedialog
             path = filedialog.askopenfilename(title="Seleccionar Excel", filetypes=[("Excel", "*.xlsx")])
         if not path: return
-        ok = escribir_resultados_exploratorios(path=path, recomendacion=self._recomendacion["titulo"], justificacion=self._recomendacion["justificacion"], tabla_resultados=self._resultados)
+        conf = {
+            "var_dep": sesion.get("var_dependiente"),
+            "vars_ind": sesion.get("vars_independientes"),
+            "f_ini": sesion.get("fecha_inicio"),
+            "f_fin": sesion.get("fecha_fin")
+        }
+        ok = escribir_resultados_exploratorios(path, self._recomendacion["titulo"], self._recomendacion["justificacion"], self._resultados, conf)
         if ok: messagebox.showinfo("Éxito", f"Excel actualizado en:\n{path}")
 
     def _card(self, parent, fila, titulo):
