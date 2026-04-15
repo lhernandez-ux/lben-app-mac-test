@@ -64,13 +64,12 @@ def calcular_correlaciones(
 
     y = pd.to_numeric(df[var_dep], errors="coerce")
 
+    # 1. Cálculo base de correlaciones
     for var in vars_ind:
         if var not in df.columns:
             continue
 
         x = pd.to_numeric(df[var], errors="coerce")
-
-        # Eliminar filas con NaN en cualquiera de las dos series
         mask  = y.notna() & x.notna()
         y_val = y[mask].values
         x_val = x[mask].values
@@ -82,36 +81,94 @@ def calcular_correlaciones(
                 "r_pearson":      None,
                 "p_valor":        None,
                 "significativa":  False,
-                "grado":          "Sin datos suficientes",
-                "interpretacion": f"Solo {n} datos válidos. Mínimo requerido: 3.",
+                "grado":          "Sin datos",
+                "interpretacion": f"Mínimo 3 datos.",
+                "sugerencia":     "Excluir",
+                "vif":            None,
                 "n":              n
             })
             continue
 
-        # Cálculo con scipy (incluye t-estadístico internamente)
         r, p_valor = stats.pearsonr(x_val, y_val)
-
-        significativa = p_valor < alpha
-        grado         = clasificar_correlacion(r)
-        interpretacion = _generar_interpretacion(var, r, p_valor,
-                                                  significativa, grado)
-
         resultados.append({
             "variable":       var,
             "r_pearson":      round(r, 4),
             "p_valor":        round(p_valor, 4),
-            "significativa":  significativa,
-            "grado":          grado,
-            "interpretacion": interpretacion,
+            "significativa":  p_valor < alpha,
+            "grado":          clasificar_correlacion(r),
+            "vif":            1.0, # Placeholder
             "n":              n
         })
 
-    # Ordenar por |r| descendente
-    resultados.sort(
-        key=lambda d: abs(d["r_pearson"]) if d["r_pearson"] is not None else 0,
-        reverse=True
-    )
+    # 2. Análisis de Colinealidad (VIF) y Selección Sugerida
+    # Filtramos las que son al menos significativas para el análisis de competencia
+    vars_validas = [r["variable"] for r in resultados if r["significativa"]]
+    
+    # Cálculo de VIF si hay más de una variable significativa
+    vifs = {}
+    if len(vars_validas) > 1:
+        try:
+            from statsmodels.stats.outliers_influence import variance_inflation_factor
+            import statsmodels.api as sm
+            X = df[vars_validas].apply(pd.to_numeric, errors='coerce').dropna()
+            if len(X) > len(vars_validas):
+                X_const = sm.add_constant(X)
+                for i, var in enumerate(vars_validas):
+                    # +1 porque el índice 0 es la constante
+                    vifs[var] = variance_inflation_factor(X_const.values, i + 1)
+        except Exception: pass
 
+    # 3. Lógica de Sugerencia Decisiva (Competencia por Colinealidad)
+    # Paso A: Marcar las no significativas
+    for res in resultados:
+        if not res["significativa"]:
+            res["sugerencia"] = "Excluir"
+            res["interpretacion"] = "No representativa (p >= 0.05)."
+            res["vif"] = round(vifs.get(res["variable"], 1.0), 2)
+
+    # Paso B: Tratar las significativas y resolver colinealidad
+    sig_res = [r for r in resultados if r["significativa"]]
+    
+    # Ordenamos las significativas por |r| de mayor a menor para que la "mejor" tenga prioridad
+    sig_res.sort(key=lambda d: abs(d["r_pearson"]), reverse=True)
+    
+    variables_ya_excluidas = set()
+    
+    for i, res in enumerate(sig_res):
+        var = res["variable"]
+        res["vif"] = round(vifs.get(var, 1.0), 2)
+        
+        if var in variables_ya_excluidas:
+            continue
+
+        # Si tiene VIF alto (>5), buscamos con quién colisiona
+        if res["vif"] > 5:
+            v_validas = [r["variable"] for r in sig_res]
+            corr_matrix = df[v_validas].apply(pd.to_numeric, errors="coerce").corr().abs()
+            
+            for j in range(i + 1, len(sig_res)):
+                comp = sig_res[j]
+                v_comp = comp["variable"]
+                
+                if v_comp in variables_ya_excluidas: continue
+                
+                # Si son muy similares (>0.85), excluimos a la competidora (porque r_i > r_j)
+                if corr_matrix.loc[var, v_comp] > 0.85:
+                    comp["sugerencia"] = "Excluir"
+                    # Construir interpretación compuesta para la excluida
+                    base_int = _generar_interpretacion(v_comp, comp["r_pearson"], comp["p_valor"], True, comp["grado"])
+                    # Quitamos el final estándar de "Incluir..." si existiera
+                    base_int = base_int.split(". Incluir")[0] + "."
+                    comp["interpretacion"] = f"{base_int} Colineal con '{var}'. Use solo una."
+                    variables_ya_excluidas.add(v_comp)
+
+        # Si no fue excluida por colinealidad previa, se incluye definitivamente
+        if "sugerencia" not in res:
+            res["sugerencia"] = "Incluir"
+            res["interpretacion"] = _generar_interpretacion(var, res["r_pearson"], res["p_valor"], True, res["grado"])
+
+    # Ordenar por |r| descendente para la vista final
+    resultados.sort(key=lambda d: abs(d["r_pearson"]) if d["r_pearson"] is not None else 0, reverse=True)
     return resultados
 
 
@@ -236,7 +293,7 @@ def detectar_outliers(df: pd.DataFrame, col: str) -> dict:
 
 def detectar_colinealidad(df: pd.DataFrame, vars_ind: list[str], threshold: float = 0.85) -> list:
     """
-    Detecta si dos variables independientes son muy parecidas (redundantes).
+    Detecta si dos variables independientes son muy parecidas (colinealidad).
     """
     alertas = []
     v_validas = [v for v in vars_ind if v in df.columns]
@@ -246,7 +303,6 @@ def detectar_colinealidad(df: pd.DataFrame, vars_ind: list[str], threshold: floa
     # Matriz de correlación solo para variables independientes
     corr_matrix = df[v_validas].apply(pd.to_numeric, errors="coerce").corr().abs()
 
-    parejas_vistas = set()
     for i in range(len(v_validas)):
         for j in range(i + 1, len(v_validas)):
             v1, v2 = v_validas[i], v_validas[j]
@@ -255,7 +311,7 @@ def detectar_colinealidad(df: pd.DataFrame, vars_ind: list[str], threshold: floa
                 alertas.append({
                     "variables": (v1, v2),
                     "r": round(r, 2),
-                    "mensaje": f"'{v1}' y '{v2}' son muy similares (r={r:.2f}). Usar ambas podría confundir al modelo."
+                    "mensaje": f"'{v1}' y '{v2}' están altamente correlacionadas entre sí (r={r:.2f}). Esta colinealidad sugiere usar solo una de ellas para evitar inestabilidad en el modelo."
                 })
     return alertas
 
@@ -479,10 +535,9 @@ def _generar_interpretacion(
     """Genera texto de interpretación para la tabla de resultados."""
     if significativa:
         direccion = "positiva" if r > 0 else "negativa"
-        return (
-            f"Correlación {grado.lower()} {direccion} con el consumo. "
-            f"Variable dominante. Incluir en modelo LBEn."
-        )
+        fuerza = grado.lower()
+        impacto = "Variable dominante" if fuerza in ["alto", "muy alto"] else "Impacto moderado"
+        return f"Correlación {fuerza} {direccion} con el consumo. {impacto}. Incluir en modelo LBEn."
     else:
         return (
             f"No significativa (p ≥ 0.05). No incluir en modelo LBEn."
