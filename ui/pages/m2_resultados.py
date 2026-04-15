@@ -450,9 +450,9 @@ class M2ResultadosPage(ctk.CTkFrame):
                      text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
 
         tbl = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
-                                     height=520, orientation="horizontal",
+                                     height=500, orientation="horizontal",
                                      border_width=1, border_color=COLORS.border)
-        tbl.configure(width=1050)
+        tbl.configure(width=1080)
         tbl.pack()
         tbl.pack_configure(anchor="center")
 

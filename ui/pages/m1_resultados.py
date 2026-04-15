@@ -289,8 +289,9 @@ class M1ResultadosPage(ctk.CTkFrame):
         ctk.CTkLabel(frame, text="TABLA LBEn MENSUAL", font=(FONTS.family, 13, "bold"), text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
 
         # Contenedor con Scroll Lateral si es necesario
-        tbl_container = ctk.CTkScrollableFrame(frame, fg_color=COLORS.bg_card, height=450, orientation="horizontal", border_width=1, border_color=COLORS.border)
-        tbl_container.pack(fill="x")
+        tbl_container = ctk.CTkScrollableFrame(frame, fg_color=COLORS.bg_card, height=450, orientation="horizontal", border_width=1, border_color=COLORS.border, width=950)
+        tbl_container.pack(pady=0)
+        tbl_container.pack_configure(anchor="center")
 
         headers = ["Mes", "LBEn (kWh/mes)", "N Datos", "Límite Inf. (kWh)", "Límite Sup. (kWh)"]
         h_frame = ctk.CTkFrame(tbl_container, fg_color=COLORS.primary, height=35)
@@ -374,8 +375,10 @@ class M1ResultadosPage(ctk.CTkFrame):
         ctk.CTkLabel(scroll, text="TABLA DE AHORRO POTENCIAL", font=(FONTS.family, 14, "bold"), text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
 
         # Tabla de Ahorro Potencial
-        tbl_container = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card, height=600, orientation="horizontal", border_width=1, border_color=COLORS.border)
-        tbl_container.pack(fill="x")
+        tbl_container = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card, height=500, orientation="horizontal", border_width=1, border_color=COLORS.border)
+        tbl_container.configure(width=1050)
+        tbl_container.pack()
+        tbl_container.pack_configure(anchor="center")
 
         headers = ["Mes", "LBEn (kWh/mes)", "Mínimo Histórico (kWh)", "Ahorro Potencial (kWh)", "Ahorro Potencial (%)"]
         h_frame = ctk.CTkFrame(tbl_container, fg_color=COLORS.primary, height=35)
@@ -429,7 +432,9 @@ class M1ResultadosPage(ctk.CTkFrame):
         # 1. Contenedor Horizontal Exterior (para las columnas)
         # Aumentamos un poco el alto para contener el scroll vertical interno
         h_scroll = ctk.CTkScrollableFrame(parent, fg_color=COLORS.bg_card, height=450, orientation="horizontal", border_width=1, border_color=COLORS.border)
-        h_scroll.pack(fill="x")
+        h_scroll.configure(width=1200)
+        h_scroll.pack(pady=(0, 20))
+        h_scroll.pack_configure(anchor="center")
 
         # 2. Frame interno para organizar Header y Body verticalmente
         inner_frame = ctk.CTkFrame(h_scroll, fg_color="transparent")
