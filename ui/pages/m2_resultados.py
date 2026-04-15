@@ -190,49 +190,92 @@ class M2ResultadosPage(ctk.CTkFrame):
         scroll.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
         scroll.grid_columnconfigure(0, weight=1)
 
-        m = self.metricas
-        self._tabla_simple(scroll, "IDENTIFICACIÓN DEL PROYECTO", [
+        # Contenedor de dos columnas
+        cols = ctk.CTkFrame(scroll, fg_color="transparent")
+        cols.pack(fill="both", expand=True)
+        cols.grid_columnconfigure(0, weight=1)
+        cols.grid_columnconfigure(1, weight=1)
+
+        # ── Columna izquierda: Identificación del proyecto ──
+        left = ctk.CTkFrame(cols, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+
+        self._tabla_simple(left, "IDENTIFICACIÓN DEL PROYECTO", [
             ("Nombre Edificio / Entidad",        self.config.get("nombre", "---")),
-            ("Fuente de Energía",                self.config.get("fuente", "---")),
-            ("Unidad de Energía",                self.config.get("unidad", "---")),
+            ("Fuente de Energía",                self.config.get("fuente", "---"),
+            "Unidad de Energía",                self.config.get("unidad", "---")),
             ("Zona Climática",                   self.config.get("zona", "---")),
             ("Área útil (m2)",                   self.config.get("area", "---")),
-            ("Variable relevante (Denominador)", self.config.get("var_relevante_nom", "---")),
-            ("Unidad de la variable relevante",  self.config.get("var_relevante_uni", "---")),
+            ("Variable relevante (Denominador)", self.config.get("var_relevante_nom", "---"),
+            "Unidad de la variable relevante",  self.config.get("var_relevante_uni", "---")),
+            ("Periodo base — inicio",            self.config.get("pb_ini", "---"),
+            "Periodo base — fin",               self.config.get("pb_fin", "---")),
         ])
-        self._tabla_simple(scroll, "MÉTRICAS DEL MODELO", [
+
+        # ── Columna derecha: Métricas del modelo ──
+        right = ctk.CTkFrame(cols, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+        m = self.metricas
+        self._tabla_simple(right, "MÉTRICAS DEL MODELO", [
             ("Tipo de Modelo",               "M2 (Cociente de Valores Medidos)"),
-            ("N datos iniciales",            f"{m.get('n_inicial', 0)}"),
-            ("N datos filtrado estadístico", f"{m.get('n_filtrado', 0)}"),
-            ("N datos usados en modelo",     f"{m.get('n_final', 0)}"),
-            ("Fiabilidad [%]",               f"{m.get('fiabilidad', 0):.1f}%"),
-            ("Periodo base (inicio)",        f"{m.get('periodo_inicio', '---')}"),
-            ("Periodo base (fin)",           f"{m.get('periodo_fin', '---')}"),
-            ("Consumo promedio anual (kWh)", f"{m.get('consumo_promedio_anual', 0):,.2f}"),
-            ("Potencial ahorro anual (kWh)", f"{m.get('potencial_ahorro_kwh', 0):,.2f}"),
-            ("Potencial ahorro anual (%)",   f"{m.get('potencial_ahorro_pct', 0):.1f}%"),
+            ("N Datos iniciales",            f"{m.get('n_inicial', 0)}"),
+            ("N Datos filtrado estadístico", f"{m.get('n_filtrado', 0)}"),
+            ("N Datos usados en modelo",     f"{m.get('n_final', 0)}"),
+            ("Fiabilidad",               f"{m.get('fiabilidad', 0):.1f}%"),
             ("Meta 15% Anual Base (kWh)",    f"{m.get('meta_15', 0):,.2f}"),
-        ], pady=(20, 0))
+        ])
 
     def _tabla_simple(self, parent, title, rows, pady=0):
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="x", pady=pady)
-        ctk.CTkLabel(frame, text=title, font=(FONTS.family, 14, "bold"),
-                     text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
-        content = ctk.CTkFrame(frame, fg_color=COLORS.bg_card, corner_radius=8,
-                               border_width=1, border_color=COLORS.border)
-        content.pack(fill="x")
-        for i, (label, value) in enumerate(rows):
-            if i > 0:
-                ctk.CTkFrame(content, fg_color=COLORS.border, height=1).pack(fill="x", padx=10)
-            row_f = ctk.CTkFrame(content, fg_color="transparent", height=35)
-            row_f.pack(fill="x", padx=15, pady=2)
-            ctk.CTkLabel(row_f, text=label, font=(FONTS.family, 11),
-                         text_color=COLORS.text_secondary, anchor="w"
-                         ).place(relx=0, rely=0.5, anchor="w")
-            ctk.CTkLabel(row_f, text=str(value), font=(FONTS.family, 11, "bold"),
-                         text_color=COLORS.text_primary, anchor="e"
-                         ).place(relx=1.0, rely=0.5, anchor="e")
+
+        title_row = ctk.CTkFrame(frame, fg_color=COLORS.primary, height=38, corner_radius=8)
+        title_row.pack(fill="x")
+        title_row.pack_propagate(False)
+
+        ctk.CTkFrame(title_row, fg_color=COLORS.accent, width=4, height=20, corner_radius=2).place(x=12, y=9)
+        ctk.CTkLabel(title_row, text=title, font=(FONTS.family, FONTS.size_xl, "bold"),text_color="white", anchor="w").place(x=20, y=19, anchor="w")
+
+        content = ctk.CTkFrame(frame, fg_color=COLORS.bg_card, corner_radius=20,border_width=1, border_color=COLORS.border)
+        content.pack(fill="x", padx=10, pady=0)
+
+        for i, row in enumerate(rows):
+            # Fila doble: tupla de 4 elementos (label1, val1, label2, val2)
+            if len(row) == 4:
+                label1, value1, label2, value2 = row
+                row_f = ctk.CTkFrame(content, fg_color="transparent", height=35)
+                row_f.pack(fill="x", padx=15, pady=2)
+                row_f.pack_propagate(False)
+
+                # Mitad izquierda
+                left_half = ctk.CTkFrame(row_f, fg_color="transparent")
+                left_half.place(relx=0, rely=0, relwidth=0.48, relheight=1.0)
+
+                ctk.CTkLabel(left_half, text=label1,font=(FONTS.family, FONTS.size_md),text_color="#7A8C85", anchor="w").place(relx=0, rely=0.5, anchor="w")
+                ctk.CTkLabel(left_half, text=str(value1),font=(FONTS.family, FONTS.size_lg, "bold"),text_color=COLORS.primary, anchor="e").place(relx=1.0, rely=0.5, anchor="e")
+
+                # Separador vertical central
+                ctk.CTkFrame(row_f, fg_color=COLORS.border, width=1,corner_radius=0).place(relx=0.5, rely=0.1, relheight=0.8)
+
+                # Mitad derecha
+                right_half = ctk.CTkFrame(row_f, fg_color="transparent")
+                right_half.place(relx=0.52, rely=0, relwidth=0.48, relheight=1.0)
+
+                ctk.CTkLabel(right_half, text=label2,font=(FONTS.family, FONTS.size_md),text_color="#7A8C85", anchor="w").place(relx=0, rely=0.5, anchor="w")
+                ctk.CTkLabel(right_half, text=str(value2),font=(FONTS.family, FONTS.size_lg, "bold"),text_color=COLORS.primary, anchor="e").place(relx=1.0, rely=0.5, anchor="e")
+
+            # Fila simple: tupla de 2 elementos (comportamiento original)
+            else:
+                label, value = row
+                row_f = ctk.CTkFrame(content, fg_color="transparent", height=35)
+                row_f.pack(fill="x", padx=15, pady=2)
+
+                ctk.CTkLabel(row_f, text=label,font=(FONTS.family, FONTS.size_md),text_color="#7A8C85", anchor="w").place(relx=0, rely=0.5, anchor="w")
+                ctk.CTkLabel(row_f, text=str(value),font=(FONTS.family, FONTS.size_lg, "bold"),text_color=COLORS.primary, anchor="e").place(relx=1.0, rely=0.5, anchor="e")
+
+            if i < len(rows) - 1:
+                ctk.CTkFrame(content, fg_color=COLORS.border, height=1,corner_radius=0).pack(fill="x", padx=10)
 
     # ─────────────────────────────────────────────────────────────────
     # TAB 2: LÍNEA BASE
@@ -246,11 +289,19 @@ class M2ResultadosPage(ctk.CTkFrame):
         # Header
         header = ctk.CTkFrame(scroll, fg_color="transparent")
         header.pack(fill="x", pady=(0, 15))
-        ctk.CTkLabel(header, text="Comportamiento de la Línea Base",
-                     font=(FONTS.family, 14, "bold"),
-                     text_color=COLORS.primary).pack(side="left")
+
+        title = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
+        title.pack(side="left", padx=(0, 10)) 
+        title.pack_propagate(True)
+
+        ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
+            .place(x=12, y=5)
+        
+        ctk.CTkLabel(title, text="Comportamiento de la Línea Base",
+                     font=(FONTS.family, FONTS.size_lg, "bold"),
+                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
         ctk.CTkButton(header, text="🌐 Ver interactivo en navegador",
-                      font=(FONTS.family, 10, "bold"), fg_color="transparent",
+                      font=(FONTS.family, FONTS.size_sm, "bold"), fg_color="transparent",
                       border_width=1, border_color=COLORS.primary,
                       text_color=COLORS.primary, height=28,
                       command=self._abrir_plotly_lben).pack(side="right")
@@ -308,14 +359,24 @@ class M2ResultadosPage(ctk.CTkFrame):
     def _tabla_lben_datos(self, parent):
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="x", pady=20)
-        ctk.CTkLabel(frame, text="TABLA LBEn MENSUAL",
-                     font=(FONTS.family, 13, "bold"),
-                     text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
+
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 10))
+
+        title = ctk.CTkFrame(header, fg_color=COLORS.primary, height=30, corner_radius=8)
+        title.pack(side="left", padx=(0, 10))
+        title.pack_propagate(True)
+
+        ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=16, corner_radius=2)\
+            .place(x=12, y=5)
+
+        ctk.CTkLabel(title,text="TABLA LBEn MENSUAL",font=(FONTS.family, FONTS.size_lg, "bold"),text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
 
         tbl = ctk.CTkScrollableFrame(frame, fg_color=COLORS.bg_card,
                                      height=450, orientation="horizontal",
-                                     border_width=1, border_color=COLORS.border)
-        tbl.pack(fill="x")
+                                     border_width=1, border_color=COLORS.border,width=900)
+        tbl.pack(pady=0)
+        tbl.pack_configure(anchor="center")
 
         COL_W = 160
         headers = ["Mes", "LBEn (Cociente)", "N Datos",
@@ -391,7 +452,9 @@ class M2ResultadosPage(ctk.CTkFrame):
         tbl = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
                                      height=520, orientation="horizontal",
                                      border_width=1, border_color=COLORS.border)
-        tbl.pack(fill="x")
+        tbl.configure(width=1050)
+        tbl.pack()
+        tbl.pack_configure(anchor="center")
 
         COL_W = 175
         headers = ["Mes", "LBEn (Cociente)", "Mín. Histórico",
@@ -451,7 +514,9 @@ class M2ResultadosPage(ctk.CTkFrame):
         h_scroll = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
                                      height=380, orientation="horizontal",
                                      border_width=1, border_color=COLORS.border)
-        h_scroll.pack(fill="x", pady=(0, 20))
+        h_scroll.configure(width=1200)
+        h_scroll.pack(pady=(0, 20))
+        h_scroll.pack_configure(anchor="center")
 
         # 2. Frame interno para Header + Body
         inner_tbl = ctk.CTkFrame(h_scroll, fg_color="transparent")

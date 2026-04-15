@@ -119,22 +119,45 @@ class M3ResultadosPage(ctk.CTkFrame):
         scroll = ctk.CTkScrollableFrame(self.content_view, fg_color="transparent")
         scroll.grid(row=0, column=0, sticky="nsew")
         scroll.grid_columnconfigure(0, weight=1)
-        
+
+        cols = ctk.CTkFrame(scroll, fg_color="transparent")
+        cols.pack(fill="both", expand=True)
+        cols.grid_columnconfigure(0, weight=1)
+        cols.grid_columnconfigure(1, weight=1)
+
+        left = ctk.CTkFrame(cols, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+
         m = self.res['metrics']
         p = self.res['potenciales']
-        id_rows = [("Entidad", self.config['nombre']), ("Fuente", self.config['fuente']), ("Unidad", self.config['unidad']), ("Zona", self.config['zona']), ("Área útil (m²)", self.config['area'])]
-        for i, v in enumerate(self.config['vars_ind']): id_rows.append((f"Variable {i+1}", v))
-        
-        self._tabla_simple(scroll, "IDENTIFICACIÓN DEL PROYECTO", id_rows)
-        self._tabla_simple(scroll, "MÉTRICAS DEL MODELO", [
-            ("Tipo de Modelo", "M3 (Regresión Multivariable)"),
-            ("Fiabilidad (R2)", f"{m['fiabilidad']:.2f}%"),
-            ("RMSE (Error)", f"{m['rmse']:,.2f}"),
+
+        # ── Variables independientes dinámicas ──
+        vars_rows = []
+        for i, v in enumerate(self.config['vars_ind']):
+            vars_rows.append((f"Variable independiente {i+1}", v))
+
+        self._tabla_simple(left, "IDENTIFICACIÓN DEL PROYECTO", [
+            ("Entidad",                          self.config['nombre']),
+            ("Fuente",    self.config['fuente'],
+            "Unidad",    self.config['unidad']),
+            ("Zona Climática",                   self.config['zona']),
+            ("Área útil (m²)",                   self.config['area']),
+            *vars_rows,
+        ])
+
+        right = ctk.CTkFrame(cols, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+        self._tabla_simple(right, "MÉTRICAS DEL MODELO", [
+            ("Tipo de Modelo",      "M3 (Regresión Multivariable)"),
+            ("Fiabilidad (R2)",     f"{m['fiabilidad']:.2f}%"),
+            ("RMSE (Error)",        f"{m['rmse']:,.2f}"),
             ("N registros totales", f"{len(self.res['df_base']) + len(self.res['df_excluidos'])}"),
-            ("N filtrados", f"{len(self.res['df_excluidos'])}"),
-            ("Periodo Base", f"{self.app.session['pb_ini']} - {self.app.session['pb_fin']}"),
-            ("Meta 15% (kWh/año)", f"{p['prom_real']*12*0.15:,.2f}")
-        ], pady=20)
+            ("N filtrados",         f"{len(self.res['df_excluidos'])}"),
+            ("Periodo Base",        f"{self.app.session['pb_ini']}",
+            "Periodo Fin",         f"{self.app.session['pb_fin']}"),
+            ("Meta 15% (kWh/año)", f"{p['prom_real']*12*0.15:,.2f}"),
+        ])
 
     def _render_diag(self):
         scroll = ctk.CTkScrollableFrame(self.content_view, fg_color="transparent")
@@ -446,15 +469,58 @@ class M3ResultadosPage(ctk.CTkFrame):
     def _tabla_simple(self, parent, title, rows, pady=0):
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="x", pady=pady)
-        ctk.CTkLabel(frame, text=title, font=(FONTS.family, 14, "bold"), text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
-        content = ctk.CTkFrame(frame, fg_color=COLORS.bg_card, corner_radius=8, border_width=1, border_color=COLORS.border)
-        content.pack(fill="x")
-        for i, (l, v) in enumerate(rows):
-            if i > 0: ctk.CTkFrame(content, fg_color=COLORS.border, height=1).pack(fill="x", padx=10)
-            row_f = ctk.CTkFrame(content, fg_color="transparent", height=35)
-            row_f.pack(fill="x", padx=15, pady=2)
-            ctk.CTkLabel(row_f, text=l, font=(FONTS.family, 11), text_color=COLORS.text_secondary, anchor="w").place(relx=0, rely=0.5, anchor="w")
-            ctk.CTkLabel(row_f, text=str(v), font=(FONTS.family, 11, "bold"), text_color=COLORS.text_primary, anchor="e").place(relx=1.0, rely=0.5, anchor="e")
+
+        title_row = ctk.CTkFrame(frame, fg_color=COLORS.primary, height=38, corner_radius=8)
+        title_row.pack(fill="x")
+        title_row.pack_propagate(False)
+
+        ctk.CTkFrame(title_row, fg_color=COLORS.accent, width=4, height=20, corner_radius=2).place(x=12, y=9)
+        ctk.CTkLabel(title_row, text=title, font=(FONTS.family, FONTS.size_xl, "bold"),
+                    text_color="white", anchor="w").place(x=20, y=19, anchor="w")
+
+        content = ctk.CTkFrame(frame, fg_color=COLORS.bg_card, corner_radius=20,
+                            border_width=1, border_color=COLORS.border)
+        content.pack(fill="x", padx=10, pady=0)
+
+        for i, row in enumerate(rows):
+            # Fila doble: tupla de 4 elementos
+            if len(row) == 4:
+                label1, value1, label2, value2 = row
+                row_f = ctk.CTkFrame(content, fg_color="transparent", height=35)
+                row_f.pack(fill="x", padx=15, pady=2)
+                row_f.pack_propagate(False)
+
+                left_half = ctk.CTkFrame(row_f, fg_color="transparent")
+                left_half.place(relx=0, rely=0, relwidth=0.48, relheight=1.0)
+                ctk.CTkLabel(left_half, text=label1, font=(FONTS.family, FONTS.size_md),
+                            text_color="#7A8C85", anchor="w").place(relx=0, rely=0.5, anchor="w")
+                ctk.CTkLabel(left_half, text=str(value1), font=(FONTS.family, FONTS.size_lg, "bold"),
+                            text_color=COLORS.primary, anchor="e").place(relx=1.0, rely=0.5, anchor="e")
+
+                ctk.CTkFrame(row_f, fg_color=COLORS.border, width=1,
+                            corner_radius=0).place(relx=0.5, rely=0.1, relheight=0.8)
+
+                right_half = ctk.CTkFrame(row_f, fg_color="transparent")
+                right_half.place(relx=0.52, rely=0, relwidth=0.48, relheight=1.0)
+                ctk.CTkLabel(right_half, text=label2, font=(FONTS.family, FONTS.size_md),
+                            text_color="#7A8C85", anchor="w").place(relx=0, rely=0.5, anchor="w")
+                ctk.CTkLabel(right_half, text=str(value2), font=(FONTS.family, FONTS.size_lg, "bold"),
+                            text_color=COLORS.primary, anchor="e").place(relx=1.0, rely=0.5, anchor="e")
+
+            # Fila simple: tupla de 2 elementos
+            else:
+                label, value = row
+                row_f = ctk.CTkFrame(content, fg_color="transparent", height=35)
+                row_f.pack(fill="x", padx=15, pady=2)
+                row_f.pack_propagate(False)
+                ctk.CTkLabel(row_f, text=label, font=(FONTS.family, FONTS.size_md),
+                            text_color="#7A8C85", anchor="w").place(relx=0, rely=0.5, anchor="w")
+                ctk.CTkLabel(row_f, text=str(value), font=(FONTS.family, FONTS.size_lg, "bold"),
+                            text_color=COLORS.primary, anchor="e").place(relx=1.0, rely=0.5, anchor="e")
+
+            if i < len(rows) - 1:
+                ctk.CTkFrame(content, fg_color=COLORS.border, height=1,
+                            corner_radius=0).pack(fill="x", padx=10)
 
     def _actualizar_excel(self):
         path = self.app.session.get("excel_path")
