@@ -393,8 +393,15 @@ def escribir_resultados_m3(path, res, config):
         vif_val = ct['vif'][i]
         try:
             if vif_val is not None and not np.isnan(float(vif_val)):
-                ws_diag[f"F{f}"].value = vif_val
-                ws_diag[f"F{f}"].number_format = fmt_num
+                celda_vif = ws_diag[f"F{f}"]
+                celda_vif.value = vif_val
+                celda_vif.number_format = fmt_num
+                
+                # Alerta visual si VIF > 10 (Color Rojo)
+                if float(vif_val) > 10:
+                    celda_vif.font = Font(color="FF0000", bold=True)
+                else:
+                    celda_vif.font = Font(color="000000", bold=False)
         except (TypeError, ValueError):
             pass
 

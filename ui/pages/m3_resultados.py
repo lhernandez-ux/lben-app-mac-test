@@ -122,13 +122,24 @@ class M3ResultadosPage(ctk.CTkFrame):
         
         m = self.res['metrics']
         p = self.res['potenciales']
+
+        # A. Alerta de Colinealidad (VIF)
+        ct = self.res['coef_table']
+        vifs_altos = [ct['vars'][i] for i, v in enumerate(ct['vif']) if not np.isnan(v) and v > 5]
+        if vifs_altos:
+            f_col = ctk.CTkFrame(scroll, fg_color=COLORS.bg_main, corner_radius=12, border_width=2, border_color=COLORS.warning)
+            f_col.pack(fill="x", pady=(10, 20), padx=5)
+            ctk.CTkLabel(f_col, text="⚠️ ALERTA DE COLINEALIDAD DETECTADA", font=(FONTS.family, 13, "bold"), text_color=COLORS.warning).pack(pady=(10, 5))
+            msg = f"Las variables {', '.join(vifs_altos)} tienen un VIF superior a 5.0.\nEsto indica redundancia técnica que puede afectar la precisión del modelo.\nSe recomienda revisar la fase exploratoria y reducir predictores."
+            ctk.CTkLabel(f_col, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, justify="center").pack(pady=(0, 15), padx=20)
+
         id_rows = [("Entidad", self.config['nombre']), ("Fuente", self.config['fuente']), ("Unidad", self.config['unidad']), ("Zona", self.config['zona']), ("Área útil (m²)", self.config['area'])]
         for i, v in enumerate(self.config['vars_ind']): id_rows.append((f"Variable {i+1}", v))
         
         self._tabla_simple(scroll, "IDENTIFICACIÓN DEL PROYECTO", id_rows)
         self._tabla_simple(scroll, "MÉTRICAS DEL MODELO", [
             ("Tipo de Modelo", "M3 (Regresión Multivariable)"),
-            ("Fiabilidad (R2)", f"{m['fiabilidad']:.2f}%"),
+            ("R² Ajustado", f"{m['r2_adj']*100:.2f}%"),
             ("RMSE (Error)", f"{m['rmse']:,.2f}"),
             ("N registros totales", f"{len(self.res['df_base']) + len(self.res['df_excluidos'])}"),
             ("N filtrados", f"{len(self.res['df_excluidos'])}"),
