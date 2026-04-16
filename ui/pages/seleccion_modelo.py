@@ -7,6 +7,7 @@ Muestra los 3 modelos disponibles con la recomendación destacada.
 
 import customtkinter as ctk
 from ui.theme import COLORS, FONTS, DIMS
+from ui.utils import resource_path
 
 
 class SeleccionModeloPage(ctk.CTkFrame):
@@ -211,7 +212,7 @@ class SeleccionModeloPage(ctk.CTkFrame):
         
         modelo_id = modelo["codigo"]
         icon_map = {"M1": "m1_icon.png", "M2": "m2_icon.png", "M3": "m3_icon.png"}
-        icon_path = os.path.join("assets", icon_map.get(modelo_id, "m1_icon.png"))
+        icon_path = resource_path(os.path.join("assets", icon_map.get(modelo_id, "m1_icon.png")))
         
         try:
             pil_img = Image.open(icon_path)

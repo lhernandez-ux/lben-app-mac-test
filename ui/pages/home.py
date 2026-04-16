@@ -8,6 +8,7 @@ import customtkinter as ctk
 from PIL import Image
 import os
 from ui.theme import COLORS, FONTS, DIMS
+from ui.utils import resource_path
 
 
 class HomePage(ctk.CTkFrame):
@@ -50,7 +51,7 @@ class HomePage(ctk.CTkFrame):
         ).pack(pady=(0, 20))
 
         # Logo
-        logo_path = os.path.join("assets", "logo_lben.png")
+        logo_path = resource_path(os.path.join("assets", "logo_lben.png"))
         if os.path.exists(logo_path):
             img = ctk.CTkImage(light_image=Image.open(logo_path),
                                dark_image=Image.open(logo_path),
@@ -203,7 +204,7 @@ class HomePage(ctk.CTkFrame):
         # Copyright
         ctk.CTkLabel(
             footer,
-            text="© 2026 — Herramienta de análisis energético",
+            text="© 2026 — Herramienta de análisis energético  |  Resolución UPME 016/2024",
             font=(FONTS.family, FONTS.size_xs),
             text_color=COLORS.text_secondary
         ).grid(row=1, column=0, pady=(8, 0))

@@ -14,6 +14,7 @@ import numpy as np
 import os
 from PIL import Image
 from ui.theme import COLORS, FONTS, DIMS
+from ui.utils import resource_path
 
 
 class ExploratorioResultadosPage(ctk.CTkFrame):
@@ -152,7 +153,7 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         card.grid_columnconfigure(1, weight=1)
 
         icon_map = {"M1": "m1_icon.png", "M2": "m2_icon.png", "M3": "m3_icon.png"}
-        icon_path = os.path.join("assets", icon_map.get(rec["codigo"], "m1_icon.png"))
+        icon_path = resource_path(os.path.join("assets", icon_map.get(rec["codigo"], "m1_icon.png")))
         
         try:
             pil_img = Image.open(icon_path)

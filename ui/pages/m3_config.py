@@ -88,7 +88,7 @@ class M3ConfigPage(ctk.CTkFrame):
         fuente_frame.grid_columnconfigure((0, 1), weight=1)
 
         self.entry_fuente = self._entry_with_label(fuente_frame, "Fuente de Energía", "Ej: Electricidad", 0, 0)
-        self.entry_unidad = self._entry_with_label(fuente_frame, "Unidad de Medida", "Ej: kWh", 0, 1)
+        self.sel_unidad = self._option_menu_with_label(fuente_frame, "Unidad de Medida", ["kWh", "MWh", "GJ", "MMBTU"], 0, 1)
 
         self.sel_zona = self._option_menu_with_label(
             fuente_frame, "Zona Climática", ["Cálida", "Templada", "Fría"], 1, 0
@@ -320,7 +320,7 @@ class M3ConfigPage(ctk.CTkFrame):
         data = {
             "nombre":  self.entry_nombre.get().strip(),
             "fuente":  self.entry_fuente.get().strip(),
-            "unidad":  self.entry_unidad.get().strip(),
+            "unidad": self.sel_unidad.get(),
             "zona":    self.sel_zona.get(),
             "area":    self.entry_area.get().strip() or "No disponible",
             "pb_ini":  self.sel_pb_ini.get_value(),

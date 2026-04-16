@@ -14,10 +14,15 @@ import numpy as np
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
+import sys
+
+def _get_data_dir():
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, "data")
+    return os.path.join(os.path.dirname(__file__), "..", "data")
 
 # ── Rutas a plantillas ────────────────────────────────────────────────────────
-_DIR_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DIR_DATA = os.path.join(_DIR_BASE, "data")
+_DIR_DATA = _get_data_dir()
 _PLANTILLA_M1 = os.path.join(_DIR_DATA, "Plantilla_LBEn_M1_modelo.xlsx")
 _PLANTILLA_M2 = os.path.join(_DIR_DATA, "Plantilla_LBEn_M2_modelo.xlsx")
 _PLANTILLA_M3 = os.path.join(_DIR_DATA, "Plantilla_LBEn_M3_modelo.xlsx")
