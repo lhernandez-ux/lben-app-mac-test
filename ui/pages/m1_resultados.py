@@ -414,9 +414,9 @@ class M1ResultadosPage(ctk.CTkFrame):
                      text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
 
         tbl = ctk.CTkScrollableFrame(frame, fg_color=COLORS.bg_card,
-                                     height=450, orientation="horizontal",
+                                     height=420, orientation="horizontal",
                                      border_width=1, border_color=COLORS.border,
-                                     width=900)
+                                     width=870)
         tbl.pack(pady=0)
         tbl.pack_configure(anchor="center")
 
@@ -513,7 +513,7 @@ class M1ResultadosPage(ctk.CTkFrame):
                      text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
 
         tbl = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
-                                     height=490, orientation="horizontal",
+                                     height=470, orientation="horizontal",
                                      border_width=1, border_color=COLORS.border)
         tbl.configure(width=840)
         tbl.pack()
@@ -566,16 +566,20 @@ class M1ResultadosPage(ctk.CTkFrame):
             ctk.CTkLabel(scroll, text="No hay datos de monitoreo cargados.",
                          font=(FONTS.family, 14)).pack(pady=50)
             return
+        # Header
+        header = ctk.CTkFrame(scroll, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 15))
 
-        # ── Tabla ──
-        title_mon = ctk.CTkFrame(scroll, fg_color=COLORS.primary, height=38, corner_radius=8)
-        title_mon.pack(fill="x", pady=(0, 10))
-        title_mon.pack_propagate(True)
-        ctk.CTkFrame(title_mon, fg_color=COLORS.accent, width=4, height=20,
-                    corner_radius=2).place(x=12, y=9)
-        ctk.CTkLabel(title_mon, text="DATOS DE MONITOREO",
-                    font=(FONTS.family, FONTS.size_lg, "bold"),
-                    text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
+        title = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
+        title.pack(side="left", padx=(0, 10))
+        title.pack_propagate(True)
+
+        ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20,
+                     corner_radius=2).place(x=12, y=5)
+        ctk.CTkLabel(title, text="DATOS DE MONITOREO",
+                     font=(FONTS.family, FONTS.size_lg, "bold"),
+                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
+
 
         h_scroll = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
                                           height=380, orientation="horizontal",
@@ -639,15 +643,22 @@ class M1ResultadosPage(ctk.CTkFrame):
         self._chart_cusum(scroll)
 
     def _chart_seguimiento(self, parent):
-        header = ctk.CTkFrame(parent, fg_color="transparent")
-        header.pack(fill="x", pady=(20, 5))
-        
-        title_seg = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
-        title_seg.pack(side="left", padx=(0, 10))
-        title_seg.pack_propagate(True)
-        ctk.CTkFrame(title_seg, fg_color=COLORS.accent, width=4, height=20,
-                    corner_radius=2).place(x=12, y=9)
-        ctk.CTkLabel(title_seg, text="Seguimiento Energético: Real vs Meta",
+        # Gráfico 1: Seguimiento Real vs Meta
+        h1 = ctk.CTkFrame(parent, fg_color="transparent")
+        h1.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # 1. Header con Botón Interactivo
+        header = ctk.CTkFrame(h1, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 15))
+
+        title = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
+        title.pack(side="left", padx=(0, 10))
+        title.pack_propagate(True)
+
+        ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
+            .place(x=12, y=5)
+
+        ctk.CTkLabel(title, text="Seguimiento Energético: Real vs Meta",
                     font=(FONTS.family, FONTS.size_lg, "bold"),
                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
         ctk.CTkButton(header, text="🌐 Ver interactivo",
@@ -688,8 +699,8 @@ class M1ResultadosPage(ctk.CTkFrame):
         title_cusum.pack(side="left", padx=(0, 10))
         title_cusum.pack_propagate(True)
 
-        ctk.CTkFrame(title_cusum, fg_color=COLORS.accent, width=4, height=20,
-                    corner_radius=2).place(x=12, y=9)
+        ctk.CTkFrame(title_cusum, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
+            .place(x=12, y=5)
         
         ctk.CTkLabel(title_cusum, text="Desempeño Energético Acumulado (CUSUM)",
                     font=(FONTS.family, FONTS.size_lg, "bold"),
