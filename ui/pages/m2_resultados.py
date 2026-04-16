@@ -111,7 +111,7 @@ class M2ResultadosPage(ctk.CTkFrame):
 
     def _build_kpi_cards(self):
         frame = ctk.CTkFrame(self, fg_color="transparent")
-        frame.grid(row=1, column=0, sticky="ew", padx=20, pady=20)
+        frame.grid(row=1, column=0, sticky="ew", padx=20, pady=(12, 0))
         frame.grid_columnconfigure((0, 1, 2), weight=1)
         m = self.metricas
         self._kpi_card(frame, 0, "Consumo Promedio Anual",
@@ -123,15 +123,47 @@ class M2ResultadosPage(ctk.CTkFrame):
                        f"{m.get('potencial_ahorro_pct', 0):.1f}%", "Estimado")
 
     def _kpi_card(self, parent, col, title, value, unit, color=None):
-        c = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12,
-                         border_width=1, border_color=COLORS.border)
-        c.grid(row=0, column=col, padx=10, sticky="nsew")
-        ctk.CTkLabel(c, text=title, font=(FONTS.family, 12),
-                     text_color=COLORS.text_secondary).pack(pady=(15, 0))
-        ctk.CTkLabel(c, text=value, font=(FONTS.family, 28, "bold"),
-                     text_color=color if color else COLORS.primary).pack(pady=(5, 0))
-        ctk.CTkLabel(c, text=unit, font=(FONTS.family, 10, "bold"),
-                     text_color=COLORS.text_secondary).pack(pady=(0, 15))
+        c = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=16,
+                        border_width=2, border_color=COLORS.border)
+        c.grid(row=0, column=col, padx=8, pady=6, sticky="ew", ipady=4)
+        c.grid_columnconfigure(0, weight=1)
+        c.grid_rowconfigure(0, weight=1)
+
+        # Título
+        ctk.CTkLabel(
+            c, text=title,
+            font=(FONTS.family, FONTS.size_lg),
+            text_color=COLORS.text_secondary,
+            anchor="center"
+        ).grid(row=0, column=0, padx=14, pady=(8, 0), sticky="ew")
+
+        # Separador
+        ctk.CTkFrame(
+            c, height=1, fg_color=COLORS.border
+        ).grid(row=1, column=0, padx=20, pady=(6, 0), sticky="ew")
+
+        # Valor
+        ctk.CTkLabel(
+            c, text=value,
+            font=(FONTS.family, 26, "bold"),
+            text_color=color if color else COLORS.text_primary,
+            anchor="center"
+        ).grid(row=2, column=0, padx=14, pady=(4, 0), sticky="ew")
+
+        # Unidad
+        ctk.CTkLabel(
+            c, text=unit,
+            font=(FONTS.family, FONTS.size_sm),
+            text_color=COLORS.text_secondary,
+            anchor="center"
+        ).grid(row=3, column=0, padx=14, pady=(2, 0), sticky="ew")
+
+        # Pill centrada
+        ctk.CTkFrame(
+            c, height=4, width=20,
+            fg_color=color if color else COLORS.border,
+            corner_radius=4
+        ).grid(row=4, column=0, pady=(6, 10))
 
     def _build_tabs_area(self):
         """Área de navegación + contenido (ocupa todo el espacio restante)."""
@@ -445,12 +477,22 @@ class M2ResultadosPage(ctk.CTkFrame):
         scroll.grid(row=0, column=0, sticky="nsew")
         scroll.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(scroll, text="TABLA DE AHORRO POTENCIAL",
-                     font=(FONTS.family, 13, "bold"),
-                     text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
+        # Header
+        header = ctk.CTkFrame(scroll, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 15))
+
+        title = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
+        title.pack(side="left", padx=(0, 10))
+        title.pack_propagate(True)
+
+        ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20,
+                     corner_radius=2).place(x=12, y=5)
+        ctk.CTkLabel(title, text="TABLA DE AHORRO POTENCIAL",
+                     font=(FONTS.family, FONTS.size_lg, "bold"),
+                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
 
         tbl = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
-                                     height=500, orientation="horizontal",
+                                     height=470, orientation="horizontal",
                                      border_width=1, border_color=COLORS.border)
         tbl.configure(width=1080)
         tbl.pack()
