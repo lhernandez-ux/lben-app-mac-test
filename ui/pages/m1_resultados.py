@@ -385,6 +385,7 @@ class M1ResultadosPage(ctk.CTkFrame):
         ax.set_xticks(x_ticks)
         ax.set_xticklabels(MESES_NOMBRES)
         ax.set_ylabel(self.config['unidad'])
+        ax.set_xlabel("Período")
         ax.grid(True, linestyle=':', alpha=0.4)
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=4, fontsize=8)
         plt.tight_layout()
@@ -596,14 +597,14 @@ class M1ResultadosPage(ctk.CTkFrame):
             "Fecha", "Norm. (kWh)", "Adj. (kWh)", "LBEn (kWh)",
             "Desemp. (kWh)", "Desemp. (%)", "CUSUM (kWh)",
             "Avance Pot. (%)", "Avance 15% (%)",
-            "Econ. (COP)", "Econ. Acu. (COP)",
-            "Amb. (kgCO2e)", "Amb. Acu. (kgCO2e)"
+            "Econ.($)", "Econ. Acu. ($)",
+            "Amb. (CO2 )", "Amb. Acu. (CO2)"
         ]
         h_frame = ctk.CTkFrame(inner_tbl, fg_color=COLORS.primary, height=35)
         h_frame.pack(fill="x")
         for i, h in enumerate(headers):
             ctk.CTkLabel(h_frame, text=h, text_color="white",
-                         font=(FONTS.family, 10, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
+                         font=(FONTS.family, FONTS.size_lg, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
 
         v_scroll = ctk.CTkScrollableFrame(inner_tbl, fg_color="transparent",
                                           height=320, orientation="vertical")
@@ -633,7 +634,7 @@ class M1ResultadosPage(ctk.CTkFrame):
             for i, v in enumerate(vals):
                 txt_c = color_des if i in [4, 5, 6, 9, 10, 11, 12] else COLORS.text_primary
                 ctk.CTkLabel(r, text=v, width=COL_W,
-                             font=(FONTS.family, 10),
+                             font=(FONTS.family, FONTS.size_lg),
                              text_color=txt_c).grid(row=0, column=i, padx=5)
             ctk.CTkFrame(v_scroll, fg_color=COLORS.border, height=1).pack(fill="x")
 
@@ -677,13 +678,13 @@ class M1ResultadosPage(ctk.CTkFrame):
         lben   = self.df_mon['LBEn_Mes']
         real   = self.df_mon['Ajustado']
         ax.plot(fechas, lben, color=COLORS.primary, linestyle='--', linewidth=2,
-                label="Línea Base (Meta)")
-        ax.plot(fechas, real, color=COLORS.danger, marker='o', markersize=5,
+                label="Línea Meta")
+        ax.plot(fechas, real, color=COLORS.azul, marker='o', markersize=5,
                 linewidth=1.5, label="Consumo Real")
         lben_arr = np.array(lben, dtype=float)
         ax.fill_between(fechas, lben_arr * 0.9, lben_arr * 1.1,
                         color=COLORS.primary, alpha=0.07, label="Zona de Control")
-        ax.set_ylabel(self.config['unidad'])
+        ax.set_ylabel("kWh")
         ax.grid(True, linestyle=':', alpha=0.4)
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=3, fontsize=8)
         plt.xticks(rotation=45, ha='right', fontsize=8)
@@ -702,7 +703,7 @@ class M1ResultadosPage(ctk.CTkFrame):
         ctk.CTkFrame(title_cusum, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
             .place(x=12, y=5)
         
-        ctk.CTkLabel(title_cusum, text="Desempeño Energético Acumulado (CUSUM)",
+        ctk.CTkLabel(title_cusum, text="Desempeño energético Acumulado",
                     font=(FONTS.family, FONTS.size_lg, "bold"),
                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
         ctk.CTkButton(header, text="🌐 Ver interactivo",
@@ -734,7 +735,8 @@ class M1ResultadosPage(ctk.CTkFrame):
                         color=COLORS.primary, marker='o', markersize=4)
 
         ax.axhline(0, color=COLORS.primary, linestyle='--', alpha=0.5)
-        ax.set_ylabel("CUSUM (kWh)")
+        ax.set_ylabel(f"Acumulado ({self.config['unidad']})")  # ← agrega
+        ax.set_xlabel("Fecha")  
         ax.grid(True, linestyle=':', alpha=0.4)
         plt.xticks(rotation=45, ha='right', fontsize=8)
         plt.tight_layout()
@@ -760,7 +762,7 @@ class M1ResultadosPage(ctk.CTkFrame):
             fig.add_trace(go.Scatter(
                 x=fechas, y=real, mode='lines+markers',
                 name='Consumo Real',
-                line=dict(color=COLORS.danger, width=2),
+                line=dict(color=COLORS.azul, width=2),
                 marker=dict(size=6)))
             fig.update_layout(
                 title="Seguimiento Energético: Real vs Meta — Interactivo",
