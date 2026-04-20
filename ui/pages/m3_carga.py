@@ -55,7 +55,7 @@ class M3CargaPage(ctk.CTkFrame):
 
         # Card de Selección
         self._card_seleccion = ctk.CTkFrame(self.scroll, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
-        self._card_seleccion.grid(row=0, column=0, padx=48, pady=24, sticky="ew")
+        self._card_seleccion.grid(row=0, column=0, padx=40, pady=(20, 20), sticky="ew")
         
         ctk.CTkLabel(self._card_seleccion, text="Selecciona el archivo Excel M3 configurado", 
                      font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_secondary).pack(pady=(32, 16))
@@ -70,7 +70,7 @@ class M3CargaPage(ctk.CTkFrame):
         self.lbl_filename.pack(pady=(0, 32))
 
         self.zona_resumen = ctk.CTkFrame(self.scroll, fg_color="transparent")
-        self.zona_resumen.grid(row=1, column=0, sticky="nsew", padx=48)
+        self.zona_resumen.grid(row=1, column=0, sticky="nsew")
         self.zona_resumen.grid_columnconfigure(0, weight=1)
 
     def _seleccionar_archivo(self):
@@ -130,31 +130,82 @@ class M3CargaPage(ctk.CTkFrame):
             messagebox.showerror("Error", f"Fallo al leer archivo: {e}")
 
     def _mostrar_resumen(self):
-        for w in self.zona_resumen.winfo_children(): w.destroy()
-        
-        info = ctk.CTkFrame(self.zona_resumen, fg_color=COLORS.bg_card, corner_radius=12, border_width=1, border_color=COLORS.border)
-        info.pack(fill="x", pady=(0, 24))
-        info.grid_columnconfigure((0, 1), weight=1)
-
-        ctk.CTkLabel(info, text="Resumen de Metadatos Detectados", font=(FONTS.family, 14, "bold"), text_color=COLORS.primary).grid(row=0, column=0, columnspan=2, pady=20)
+        for w in self.zona_resumen.winfo_children():
+            w.destroy()
 
         conf = self.app.session.get("m3_config", {})
-        
-        # Columna 1
-        f1 = ctk.CTkFrame(info, fg_color="transparent")
-        f1.grid(row=1, column=0, sticky="nsew", padx=30, pady=(0, 20))
-        txts1 = [f"🏢 Proyecto: {conf.get('nombre')}", f"⚡ Fuente: {conf.get('fuente')}", f"📅 Periodo: {self.app.session.get('pb_ini')} al {self.app.session.get('pb_fin')}"]
-        for t in txts1: ctk.CTkLabel(f1, text=t, font=(FONTS.family, 11), text_color=COLORS.text_primary, anchor="w").pack(fill="x", pady=2)
 
-        # Columna 2
-        f2 = ctk.CTkFrame(info, fg_color="transparent")
-        f2.grid(row=1, column=1, sticky="nsew", padx=30, pady=(0, 20))
-        txts2 = [f"📊 Datos Base: {self.app.session.get('n_pb')} meses", f"📈 Monitoreo: {self.app.session.get('n_pr')} meses", f"🔗 Variables: {', '.join(conf.get('vars_ind'))}"]
-        for t in txts2: ctk.CTkLabel(f2, text=t, font=(FONTS.family, 11), text_color=COLORS.text_secondary, anchor="w").pack(fill="x", pady=2)
+        # Ficha de Resumen Premium (idéntica a M2)
+        card = ctk.CTkFrame(
+            self.zona_resumen,
+            fg_color=COLORS.bg_card,
+            corner_radius=DIMS.card_radius,
+            border_width=1,
+            border_color=COLORS.border
+        )
+        card.grid(row=0, column=0, padx=40, sticky="ew")
+        card.grid_columnconfigure((0, 1), weight=1)
 
-        ctk.CTkButton(self.zona_resumen, text="🚀  EJECUTAR MODELO M3 (REGRESIÓN)", 
-                      font=(FONTS.family, 15, "bold"), fg_color=COLORS.accent, text_color=COLORS.primary,
-                      height=54, command=self._procesar).pack(fill="x", pady=(0, 40))
+        # Encabezado
+        ctk.CTkLabel(
+            card,
+            text="M3 (Regresión Multivariable)",
+            font=(FONTS.family, FONTS.size_md, "bold"),
+            text_color=COLORS.accent
+        ).grid(row=0, column=0, columnspan=2, pady=(20, 15))
+
+        # Columna Izquierda: Identificación
+        f_id = ctk.CTkFrame(card, fg_color="transparent")
+        f_id.grid(row=1, column=0, sticky="nsew", padx=(40, 20), pady=(0, 25))
+
+        items = [
+            f"🏢 Entidad: {conf.get('nombre', '---')}",
+            f"⚡ Fuente: {conf.get('fuente', '---')}",
+            f"📐 Unidad: {conf.get('unidad', '---')}",
+            f"🌍 Zona: {conf.get('zona', '---')}",
+            f"📏 Área Útil: {conf.get('area', '---')}",
+            f"📅 Periodo Base: {self.app.session.get('pb_ini', '---')} - {self.app.session.get('pb_fin', '---')}"
+        ]
+        for txt in items:
+            ctk.CTkLabel(
+                f_id,
+                text=txt,
+                font=(FONTS.family, FONTS.size_xs),
+                text_color=COLORS.text_primary,
+                anchor="w"
+            ).pack(fill="x", pady=2)
+
+        # Columna Derecha: Estadísticas
+        f_st = ctk.CTkFrame(card, fg_color="transparent")
+        f_st.grid(row=1, column=1, sticky="nsew", padx=(20, 40), pady=(0, 25))
+
+        vars_txt = ", ".join(conf.get("vars_ind", [])) if conf.get("vars_ind") else "---"
+
+        stats = [
+            f"📊 Registros Periodo Base: {self.app.session.get('n_pb', 0)} datos",
+            f"📈 Registros Monitoreo: {self.app.session.get('n_pr', 0)} datos",
+            f"🔗 Variables encontradas: {vars_txt}"
+        ]
+        for txt in stats:
+            ctk.CTkLabel(
+                f_st,
+                text=txt,
+                font=(FONTS.family, FONTS.size_xs),
+                text_color=COLORS.text_secondary,
+                anchor="w"
+            ).pack(fill="x", pady=2)
+
+        # Botón ejecutar (idéntico estilo M2)
+        self.btn_calc = ctk.CTkButton(
+            self.zona_resumen,
+            text="🚀 Ejecutar Modelo M3 (Regresión)",
+            font=(FONTS.family, FONTS.size_md, "bold"),
+            fg_color=COLORS.accent,
+            text_color=COLORS.primary,
+            height=48,
+            command=self._procesar
+        )
+        self.btn_calc.grid(row=2, column=0, pady=30)
 
     def _procesar(self):
         try:
