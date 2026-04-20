@@ -111,7 +111,7 @@ class M2ResultadosPage(ctk.CTkFrame):
 
     def _build_kpi_cards(self):
         frame = ctk.CTkFrame(self, fg_color="transparent")
-        frame.grid(row=1, column=0, sticky="ew", padx=20, pady=(12, 0))
+        frame.grid(row=1, column=0, sticky="ew", padx=20, pady=20)
         frame.grid_columnconfigure((0, 1, 2), weight=1)
         m = self.metricas
         self._kpi_card(frame, 0, "Consumo Promedio Anual",
@@ -123,47 +123,15 @@ class M2ResultadosPage(ctk.CTkFrame):
                        f"{m.get('potencial_ahorro_pct', 0):.1f}%", "Estimado")
 
     def _kpi_card(self, parent, col, title, value, unit, color=None):
-        c = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=16,
-                        border_width=2, border_color=COLORS.border)
-        c.grid(row=0, column=col, padx=8, pady=6, sticky="ew", ipady=4)
-        c.grid_columnconfigure(0, weight=1)
-        c.grid_rowconfigure(0, weight=1)
-
-        # Título
-        ctk.CTkLabel(
-            c, text=title,
-            font=(FONTS.family, FONTS.size_lg),
-            text_color=COLORS.text_secondary,
-            anchor="center"
-        ).grid(row=0, column=0, padx=14, pady=(8, 0), sticky="ew")
-
-        # Separador
-        ctk.CTkFrame(
-            c, height=1, fg_color=COLORS.border
-        ).grid(row=1, column=0, padx=20, pady=(6, 0), sticky="ew")
-
-        # Valor
-        ctk.CTkLabel(
-            c, text=value,
-            font=(FONTS.family, 26, "bold"),
-            text_color=color if color else COLORS.text_primary,
-            anchor="center"
-        ).grid(row=2, column=0, padx=14, pady=(4, 0), sticky="ew")
-
-        # Unidad
-        ctk.CTkLabel(
-            c, text=unit,
-            font=(FONTS.family, FONTS.size_sm),
-            text_color=COLORS.text_secondary,
-            anchor="center"
-        ).grid(row=3, column=0, padx=14, pady=(2, 0), sticky="ew")
-
-        # Pill centrada
-        ctk.CTkFrame(
-            c, height=4, width=20,
-            fg_color=color if color else COLORS.border,
-            corner_radius=4
-        ).grid(row=4, column=0, pady=(6, 10))
+        c = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12,
+                         border_width=1, border_color=COLORS.border)
+        c.grid(row=0, column=col, padx=10, sticky="nsew")
+        ctk.CTkLabel(c, text=title, font=(FONTS.family, 12),
+                     text_color=COLORS.text_secondary).pack(pady=(15, 0))
+        ctk.CTkLabel(c, text=value, font=(FONTS.family, 28, "bold"),
+                     text_color=color if color else COLORS.primary).pack(pady=(5, 0))
+        ctk.CTkLabel(c, text=unit, font=(FONTS.family, 10, "bold"),
+                     text_color=COLORS.text_secondary).pack(pady=(0, 15))
 
     def _build_tabs_area(self):
         """Área de navegación + contenido (ocupa todo el espacio restante)."""
@@ -405,8 +373,8 @@ class M2ResultadosPage(ctk.CTkFrame):
         ctk.CTkLabel(title,text="TABLA LBEn MENSUAL",font=(FONTS.family, FONTS.size_lg, "bold"),text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
 
         tbl = ctk.CTkScrollableFrame(frame, fg_color=COLORS.bg_card,
-                                     height=430, orientation="horizontal",
-                                     border_width=1, border_color=COLORS.border,width=870)
+                                     height=450, orientation="horizontal",
+                                     border_width=1, border_color=COLORS.border,width=900)
         tbl.pack(pady=0)
         tbl.pack_configure(anchor="center")
 
@@ -477,22 +445,12 @@ class M2ResultadosPage(ctk.CTkFrame):
         scroll.grid(row=0, column=0, sticky="nsew")
         scroll.grid_columnconfigure(0, weight=1)
 
-        # Header
-        header = ctk.CTkFrame(scroll, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 15))
-
-        title = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
-        title.pack(side="left", padx=(0, 10))
-        title.pack_propagate(True)
-
-        ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20,
-                     corner_radius=2).place(x=12, y=5)
-        ctk.CTkLabel(title, text="TABLA DE AHORRO POTENCIAL",
-                     font=(FONTS.family, FONTS.size_lg, "bold"),
-                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
+        ctk.CTkLabel(scroll, text="TABLA DE AHORRO POTENCIAL",
+                     font=(FONTS.family, 13, "bold"),
+                     text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
 
         tbl = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
-                                     height=470, orientation="horizontal",
+                                     height=500, orientation="horizontal",
                                      border_width=1, border_color=COLORS.border)
         tbl.configure(width=1080)
         tbl.pack()
@@ -538,6 +496,7 @@ class M2ResultadosPage(ctk.CTkFrame):
         if self.df_mon is None or self.df_mon.empty:
             ctk.CTkLabel(scroll, text="No hay datos de monitoreo cargados.",
                          font=(FONTS.family, 14)).pack(pady=50)
+            return
 
         # Preparar fechas en español
         dfm = self.df_mon.copy()
@@ -547,19 +506,9 @@ class M2ResultadosPage(ctk.CTkFrame):
         dfm["FechaStr"] = dfm["Fecha_DT"].apply(fmt_fecha_es)
 
         # ── Tabla ──
-        # Header
-        header = ctk.CTkFrame(scroll, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 15))
-
-        title = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
-        title.pack(side="left", padx=(0, 10))
-        title.pack_propagate(True)
-
-        ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20,
-                     corner_radius=2).place(x=12, y=5)
-        ctk.CTkLabel(title, text="DATOS DE MONITOREO",
-                     font=(FONTS.family, FONTS.size_lg, "bold"),
-                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
+        ctk.CTkLabel(scroll, text="DATOS DE MONITOREO",
+                     font=(FONTS.family, 13, "bold"),
+                     text_color=COLORS.primary, anchor="w").pack(fill="x", pady=(0, 10))
 
         # 1. Contenedor Horizontal Exterior
         h_scroll = ctk.CTkScrollableFrame(scroll, fg_color=COLORS.bg_card,
@@ -578,15 +527,15 @@ class M2ResultadosPage(ctk.CTkFrame):
             "Fecha", "Norm. (kWh)", "Cociente", "LBEn (kWh)", 
             "Desemp. (kWh)", "Desemp. (%)", "CUSUM (kWh)", 
             "Avance Pot. (%)", "Avance 15% (%)", 
-            "Econ. ($)", "Eco Acum. ($)", 
-            "Amb. (CO2)", "Amb. Acu (CO2)"
+            "Econ. (COP)", "Econ. Acu. (COP)", 
+            "Amb. (CO2)", "Amb. Acu. (CO2)"
         ]
         
         h_frame = ctk.CTkFrame(inner_tbl, fg_color=COLORS.primary, height=35)
         h_frame.pack(fill="x")
         for i, h in enumerate(headers):
             ctk.CTkLabel(h_frame, text=h, text_color="white",
-                         font=(FONTS.family, FONTS.size_lg, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
+                         font=(FONTS.family, 10, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
 
         # 3. Contenedor Vertical para las filas
         v_scroll = ctk.CTkScrollableFrame(inner_tbl, fg_color="transparent", height=320, orientation="vertical")
@@ -625,7 +574,7 @@ class M2ResultadosPage(ctk.CTkFrame):
                     txt = str(val)
 
                 ctk.CTkLabel(r, text=txt, width=COL_W,
-                             font=(FONTS.family, FONTS.size_lg), text_color=color
+                             font=(FONTS.family, 10), text_color=color
                              ).grid(row=0, column=c_idx, padx=5)
             ctk.CTkFrame(v_scroll, fg_color=COLORS.border, height=1).pack(fill="x")
 
@@ -635,24 +584,11 @@ class M2ResultadosPage(ctk.CTkFrame):
         self._chart_cusum(scroll, dfm)
 
     def _chart_seguimiento(self, parent, dfm):
-        # Gráfico 1: Seguimiento Real vs Meta
-        h1 = ctk.CTkFrame(parent, fg_color="transparent")
-        h1.pack(fill="both", expand=True, padx=20, pady=10)
-
-        # 1. Header con Botón Interactivo
-        header = ctk.CTkFrame(h1, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 15))
-
-        title = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
-        title.pack(side="left", padx=(0, 10))
-        title.pack_propagate(True)
-
-        ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
-            .place(x=12, y=5)
-
-        ctk.CTkLabel(title, text="Seguimiento Energético: Real vs Meta",
-                    font=(FONTS.family, FONTS.size_lg, "bold"),
-                    text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
+        header = ctk.CTkFrame(parent, fg_color="transparent")
+        header.pack(fill="x", pady=(20, 5))
+        ctk.CTkLabel(header, text="Seguimiento Energético: Real vs Meta",
+                     font=(FONTS.family, 13, "bold"),
+                     text_color=COLORS.primary).pack(side="left")
         ctk.CTkButton(header, text="🌐 Ver interactivo", font=(FONTS.family, 10, "bold"),
                       fg_color="transparent", border_width=1,
                       border_color=COLORS.primary, text_color=COLORS.primary, height=28,
@@ -667,8 +603,8 @@ class M2ResultadosPage(ctk.CTkFrame):
         lben   = pd.to_numeric(dfm["LBEn_Ratio"],    errors="coerce").tolist()
         real   = pd.to_numeric(dfm["Cociente_Real"],  errors="coerce").tolist()
         ax.plot(fechas, lben, color=COLORS.primary, linestyle="--", linewidth=2,
-                label="Línea Meta")
-        ax.plot(fechas, real, color=COLORS.azul, marker="o", markersize=5,
+                label="Línea Base (Meta)")
+        ax.plot(fechas, real, color=COLORS.danger, marker="o", markersize=5,
                 linewidth=1.5, label="Cociente Real")
         lben_arr = np.array(lben, dtype=float)
         ax.fill_between(fechas, lben_arr * 0.9, lben_arr * 1.1,
@@ -684,17 +620,9 @@ class M2ResultadosPage(ctk.CTkFrame):
     def _chart_cusum(self, parent, dfm):
         header = ctk.CTkFrame(parent, fg_color="transparent")
         header.pack(fill="x", pady=(20, 5))
-        
-        title_cusum = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
-        title_cusum.pack(side="left", padx=(0, 10))
-        title_cusum.pack_propagate(True)
-
-        ctk.CTkFrame(title_cusum, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
-            .place(x=12, y=5)
-        
-        ctk.CTkLabel(title_cusum, text="Desempeño energético Acumulado",
-                    font=(FONTS.family, FONTS.size_lg, "bold"),
-                    text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
+        ctk.CTkLabel(header, text="Desempeño Energético Acumulado (CUSUM)",
+                     font=(FONTS.family, 13, "bold"),
+                     text_color=COLORS.primary).pack(side="left")
         ctk.CTkButton(header, text="🌐 Ver interactivo", font=(FONTS.family, 10, "bold"),
                       fg_color="transparent", border_width=1,
                       border_color=COLORS.primary, text_color=COLORS.primary, height=28,
@@ -732,11 +660,11 @@ class M2ResultadosPage(ctk.CTkFrame):
             lben = pd.to_numeric(dfm["LBEn_Ratio"],   errors="coerce")
             real = pd.to_numeric(dfm["Cociente_Real"], errors="coerce")
             fig.add_trace(go.Scatter(x=fechas, y=lben, mode="lines",
-                                     name="Línea Meta",
+                                     name="Línea Base (Meta)",
                                      line=dict(color=COLORS.primary, dash="dash", width=2)))
             fig.add_trace(go.Scatter(x=fechas, y=real, mode="lines+markers",
                                      name="Cociente Real",
-                                     line=dict(color=COLORS.azul, width=2),
+                                     line=dict(color=COLORS.danger, width=2),
                                      marker=dict(size=6)))
             # Banda de zona de control
             fig.add_trace(go.Scatter(

@@ -1,31 +1,66 @@
-# Estructura del Proyecto: LBEn Resol 016/2024
+# Estructura del Proyecto
 
 ```text
 LBEn_APP_Resol016/
-├── app.py                      # Punto de entrada principal
-├── requirements.txt            # Dependencias del proyecto
-├── arbolproyecto.md            # Este archivo
-├── codigoproyecto.md           # Resumen de todo el código fuente
-├── core/                       # Lógica de negocio y motores estadísticos
-│   ├── exploratorio.py         # Motor de análisis exploratorio (VIF, Pearson)
-│   ├── io_excel.py             # Lector/Escritor de plantillas Excel
-│   ├── session.py              # Gestión de estado de la aplicación
-│   ├── utils.py                # Utilidades generales
-│   └── models/                 # Modelos de Línea Base
-│       ├── promedio.py         # Modelo M1
-│       ├── cociente.py         # Modelo M2
-│       └── m3_regresion.py     # Modelo M3 (Regresión Multivariable)
-├── ui/                         # Interfaz de Usuario (CustomTkinter)
-│   ├── main_window.py          # Ventana principal y navegación
-│   ├── theme.py                # Definiciones de colores y fuentes
-│   └── pages/                  # Pantallas del flujo
-│       ├── home.py                 # Inicio
-│       ├── seleccion_modelo.py     # Selector de flujo
-│       ├── exploratorio_carga.py   # Carga de datos exploratorios
-│       ├── exploratorio_resultados.py # Dashboard exploratorio
-│       ├── m1_resultados.py        # Dashboard M1
-│       ├── m2_resultados.py        # Dashboard M2
-│       └── m3_resultados.py        # Dashboard M3 (Con alertas de colinealidad)
-└── data/                       # Plantillas y datos de referencia
-    └── (Plantillas Excel)
+├── README.md
+├── main.py
+├── requirements.txt
+├── temp_graph_cusum.html
+├── temp_graph_lben.html
+├── temp_graph_seguimiento.html
+├── tests/
+├── docs/
+├── assets/
+│   ├── logo_lben.png
+│   ├── m1_icon.png
+│   ├── m2_icon.png
+│   ├── m3_icon.png
+├── data/
+│   ├── Plantilla_LBEn_M1_modelo.xlsx
+│   ├── Plantilla_LBEn_M2_modelo.xlsx
+│   ├── Plantilla_LBEn_M3_modelo.xlsx
+│   ├── plantilla_exploracion_modelo.xlsx
+├── core/
+│   ├── ajuste_nr.py
+│   ├── exploratorio.py
+│   ├── io_excel.py
+│   ├── models/
+│   │   ├── m1_absoluto.py
+│   │   ├── m2_cociente.py
+│   │   ├── m3_regresion.py
+├── ui/
+│   ├── app.py
+│   ├── theme.py
+│   ├── components/
+│   │   ├── __init__.py
+│   │   ├── selector_fecha.py
+│   ├── pages/
+│   │   ├── exploratorio_carga.py
+│   │   ├── exploratorio_config.py
+│   │   ├── exploratorio_resultados.py
+│   │   ├── guia_usuario.py
+│   │   ├── home.py
+│   │   ├── informe_upme.py
+│   │   ├── m1.py
+│   │   ├── m1_carga.py
+│   │   ├── m1_config.py
+│   │   ├── m1_resultados.py
+│   │   ├── m2.py
+│   │   ├── m2_carga.py
+│   │   ├── m2_config.py
+│   │   ├── m2_resultados.py
+│   │   ├── m3.py
+│   │   ├── m3_carga.py
+│   │   ├── m3_config.py
+│   │   ├── m3_resultados.py
+│   │   ├── monitoreo.py
+│   │   ├── seleccion_modelo.py
+├── state/
+│   ├── session.py
+├── scratch/
+│   ├── check_merged.py
+│   ├── inspect_m1.py
+│   ├── inspect_m1_v2.py
+│   ├── merged_info.txt
+│   ├── merged_out.txt
 ```

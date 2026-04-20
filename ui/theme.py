@@ -38,8 +38,6 @@ class COLORS:
     gradient_mid   = "#204339"
     gradient_end   = "#C2D500"
 
-    azul           ="#4B85F1"
-
 
 # ── Tipografía ────────────────────────────────────────────────────────────────
 class FONTS:

@@ -207,14 +207,14 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         f_out = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=color_out)
         f_out.grid(row=0, column=0, padx=(0, 8), sticky="nsew")
         
-        ctk.CTkLabel(f_out, text="Calidad de Datos", font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        ctk.CTkLabel(f_out, text="Calidad de Datos", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
         if out["conteo"] > 0:
             msg = f"Se detectaron {out['conteo']} anomalías.\nEl consumo presenta picos fuera de lo común."
-            ctk.CTkLabel(f_out, text="ALERTA", font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.danger).pack()
-            ctk.CTkLabel(f_out, text=msg, font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_primary, wraplength=200).pack(padx=10, pady=(4, 8))
+            ctk.CTkLabel(f_out, text="ALERTA", font=(FONTS.family, 10, "bold"), text_color=COLORS.danger).pack()
+            ctk.CTkLabel(f_out, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200).pack(padx=10, pady=(4, 8))
         else:
-            ctk.CTkLabel(f_out, text="Datos Limpios", font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.success).pack()
-            ctk.CTkLabel(f_out, text="No se detectaron valores inusuales en el periodo.", font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
+            ctk.CTkLabel(f_out, text="Datos Limpios", font=(FONTS.family, 10, "bold"), text_color=COLORS.success).pack()
+            ctk.CTkLabel(f_out, text="No se detectaron valores inusuales en el periodo.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
 
         # --- B. COLINEALIDAD ---
         colin = diag["colinealidad"]
@@ -222,33 +222,33 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         f_col = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=color_col)
         f_col.grid(row=0, column=1, padx=4, sticky="nsew")
 
-        ctk.CTkLabel(f_col, text="Colinealidad", font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        ctk.CTkLabel(f_col, text="Colinealidad", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
         if colin:
             v1, v2 = colin[0]["variables"]
             msg_col = (f"'{v1}' y '{v2}' están altamente correlacionadas entre sí.\n"
                        f"Al ser colineales, se sugiere conservar solo la de mayor impacto y excluir la otra\n"
                        f"en la hoja 'Periodo_Análisis' antes de re-procesar.")
-            ctk.CTkLabel(f_col, text="COLINEALIDAD", font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.warning).pack()
-            ctk.CTkLabel(f_col, text=msg_col, font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_primary, wraplength=200, justify="left").pack(padx=10, pady=(4, 8))
+            ctk.CTkLabel(f_col, text="COLINEALIDAD", font=(FONTS.family, 10, "bold"), text_color=COLORS.warning).pack()
+            ctk.CTkLabel(f_col, text=msg_col, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200, justify="left").pack(padx=10, pady=(4, 8))
         else:
-            ctk.CTkLabel(f_col, text="Óptima", font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.success).pack()
-            ctk.CTkLabel(f_col, text="Las variables aportan información única y valiosa.", font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
+            ctk.CTkLabel(f_col, text="Óptima", font=(FONTS.family, 10, "bold"), text_color=COLORS.success).pack()
+            ctk.CTkLabel(f_col, text="Las variables aportan información única y valiosa.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
 
         # --- C. COMPORTAMIENTO ESTACIONAL DEL CONSUMO ---
         est = diag["estacionalidad"]
         f_est = ctk.CTkFrame(container, fg_color=COLORS.bg_main, corner_radius=8, border_width=1, border_color=COLORS.primary)
         f_est.grid(row=0, column=2, padx=(8, 0), sticky="nsew")
 
-        ctk.CTkLabel(f_est, text="Patrón del Consumo", font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
+        ctk.CTkLabel(f_est, text="Patrón del Consumo", font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary).pack(pady=(8, 2))
         if est and est["tipo"] != "N/D":
-            ctk.CTkLabel(f_est, text=est["tipo"].upper(), font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.primary).pack()
+            ctk.CTkLabel(f_est, text=est["tipo"].upper(), font=(FONTS.family, 10, "bold"), text_color=COLORS.primary).pack()
             
             tendencia = est.get("tendencia", {}).get("clase", "Estable")
             msg = f"Tendencia a largo plazo: {tendencia}\nPeriodo Pico: {est['pico']}\nPeriodo Valle: {est['valle']}"
-            ctk.CTkLabel(f_est, text=msg, font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_primary, wraplength=200, justify="left").pack(padx=10, pady=(4, 8))
+            ctk.CTkLabel(f_est, text=msg, font=(FONTS.family, 11), text_color=COLORS.text_primary, wraplength=200, justify="left").pack(padx=10, pady=(4, 8))
         else:
-            ctk.CTkLabel(f_est, text="No detectado", font=(FONTS.family, FONTS.size_md, "bold"), text_color=COLORS.text_secondary).pack()
-            ctk.CTkLabel(f_est, text="Datos insuficientes para análisis estacional.", font=(FONTS.family, FONTS.size_sm), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
+            ctk.CTkLabel(f_est, text="No detectado", font=(FONTS.family, 10, "bold"), text_color=COLORS.text_secondary).pack()
+            ctk.CTkLabel(f_est, text="Datos insuficientes para análisis estacional.", font=(FONTS.family, 11), text_color=COLORS.text_secondary, wraplength=200).pack(padx=10, pady=(4, 8))
 
     def _build_glosario(self, parent, fila):
         card = ctk.CTkFrame(parent, fg_color="transparent")
@@ -282,126 +282,64 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
 
         card = self._card(parent, fila, "🔗  Influencia de las Variables (Pearson)")
 
-        cols = [
-            "Variable Independiente", "r (Pearson)", "p-valor",
-            "¿Significativa?", "Grado", "Interpretación", "Sugerencia"
-        ]
+        # Encabezados (nueva columna: Sugerencia)
+        cols   = ["Variable Independiente", "r (Pearson)", "p-valor", "¿Significativa?", "Grado", "Interpretación", "Sugerencia"]
+        anchos = [170, 90, 90, 100, 110, 0, 100]
 
-        anchos = [170, 90, 90, 120, 110, 420, 120]
+        enc = ctk.CTkFrame(card, fg_color=COLORS.primary, corner_radius=6)
+        enc.pack(fill="x", padx=16, pady=(0, 4))
 
-        tabla = ctk.CTkFrame(card, fg_color="transparent")
-        tabla.pack(fill="x", padx=16, pady=(0, 12))
-
-        # Configurar columnas UNA SOLA VEZ (grid único)
-        for ci, ancho in enumerate(anchos):
-            if ci == 5:  # Interpretación
-                tabla.grid_columnconfigure(ci, weight=1, minsize=ancho)
-            else:
-                tabla.grid_columnconfigure(ci, weight=0, minsize=ancho)
-
-        # ── HEADER ──────────────────────────────────────────────────────────────
-        for ci, col in enumerate(cols):
+        for ci, (col, ancho) in enumerate(zip(cols, anchos)):
+            enc.grid_columnconfigure(ci, weight=1, minsize=ancho)
             ctk.CTkLabel(
-                tabla,
-                text=col,
+                enc, text=col,
                 font=(FONTS.family, FONTS.size_xs, "bold"),
-                text_color="white",
-                fg_color=COLORS.primary,
-                corner_radius=6,
-                anchor="center"
-            ).grid(row=0, column=ci, sticky="nsew", padx=0, pady=(0, 4), ipady=10)
+                text_color="white", anchor="center"
+            ).grid(row=0, column=ci, sticky="ew", padx=6, pady=10)
 
-        # ── FILAS ───────────────────────────────────────────────────────────────
-        for ri, res in enumerate(self._resultados, start=1):
+        # Filas
+        for ri, res in enumerate(self._resultados):
             bg = COLORS.bg_main if ri % 2 == 0 else COLORS.bg_card
+            fila_frame = ctk.CTkFrame(card, fg_color=bg, corner_radius=0)
+            fila_frame.pack(fill="x", padx=16, pady=1)
 
-            # Col 0
-            ctk.CTkLabel(
-                tabla,
-                text=res["variable"],
-                font=(FONTS.family, FONTS.size_xs, "bold"),
-                text_color=COLORS.primary,
-                fg_color=bg,
-                anchor="center"
-            ).grid(row=ri, column=0, sticky="nsew", padx=0, pady=1, ipady=12)
+            for ci, ancho in enumerate(anchos):
+                fila_frame.grid_columnconfigure(ci, weight=1, minsize=ancho)
 
-            # Col 1
+            # Col 0: Variable
+            ctk.CTkLabel(fila_frame, text=res["variable"], font=(FONTS.family, FONTS.size_xs, "bold"), text_color=COLORS.primary, anchor="center").grid(row=0, column=0, sticky="ew", padx=6, pady=8)
+
+            # Col 1: r de Pearson
             r_val = res["r_pearson"]
             r_txt = f"{r_val:+.4f}" if r_val is not None else "—"
+            ctk.CTkLabel(fila_frame, text=r_txt, font=(FONTS.family_mono, FONTS.size_xs, "bold"), text_color=self._color_r(r_val), anchor="center").grid(row=0, column=1, sticky="ew", padx=6, pady=8)
 
-            ctk.CTkLabel(
-                tabla,
-                text=r_txt,
-                font=(FONTS.family_mono, FONTS.size_xs, "bold"),
-                text_color=self._color_r(r_val),
-                fg_color=bg,
-                anchor="center"
-            ).grid(row=ri, column=1, sticky="nsew", padx=0, pady=1, ipady=12)
-
-            # Col 2
+            # Col 2: p-valor
             p_val = res["p_valor"]
             p_txt = f"{p_val:.4f}" if p_val is not None else "—"
             p_color = COLORS.success if res["significativa"] else COLORS.danger
+            ctk.CTkLabel(fila_frame, text=p_txt, font=(FONTS.family_mono, FONTS.size_xs), text_color=p_color, anchor="center").grid(row=0, column=2, sticky="ew", padx=6, pady=8)
 
-            ctk.CTkLabel(
-                tabla,
-                text=p_txt,
-                font=(FONTS.family_mono, FONTS.size_xs),
-                text_color=p_color,
-                fg_color=bg,
-                anchor="center"
-            ).grid(row=ri, column=2, sticky="nsew", padx=0, pady=1, ipady=12)
-
-            # Col 3
-            sig_txt = "✅ Sí" if res["significativa"] else "❌ No"
+            # Col 3: Significativa
+            sig_txt   = "✅ Sí" if res["significativa"] else "❌ No"
             sig_color = COLORS.success if res["significativa"] else COLORS.danger
+            ctk.CTkLabel(fila_frame, text=sig_txt, font=(FONTS.family, FONTS.size_xs, "bold"), text_color=sig_color, anchor="center").grid(row=0, column=3, sticky="ew", padx=6, pady=8)
 
-            ctk.CTkLabel(
-                tabla,
-                text=sig_txt,
-                font=(FONTS.family, FONTS.size_xs, "bold"),
-                text_color=sig_color,
-                fg_color=bg,
-                anchor="center"
-            ).grid(row=ri, column=3, sticky="nsew", padx=0, pady=1, ipady=12)
+            # Col 4: Grado
+            ctk.CTkLabel(fila_frame, text=res["grado"], font=(FONTS.family, FONTS.size_xs), text_color=COLORS.text_secondary, anchor="center").grid(row=0, column=4, sticky="ew", padx=6, pady=8)
 
-            # Col 4
-            ctk.CTkLabel(
-                tabla,
-                text=res["grado"],
-                font=(FONTS.family, FONTS.size_xs),
-                text_color=COLORS.text_secondary,
-                fg_color=bg,
-                anchor="center"
-            ).grid(row=ri, column=4, sticky="nsew", padx=0, pady=1, ipady=12)
+            # Col 5: Interpretación
+            ctk.CTkLabel(fila_frame, text=res.get("interpretacion", ""), font=(FONTS.family, 11), text_color=COLORS.text_primary, anchor="w", wraplength=280, justify="left").grid(row=0, column=5, sticky="ew", padx=10, pady=8)
 
-            # Col 5 (Interpretación)
-            ctk.CTkLabel(
-                tabla,
-                text=res.get("interpretacion", ""),
-                font=(FONTS.family, 11),
-                text_color=COLORS.text_primary,
-                fg_color=bg,
-                anchor="center",
-                justify="center",
-                wraplength=380
-            ).grid(row=ri, column=5, sticky="nsew", padx=0, pady=1, ipady=12)
-
-            # Col 6 (Sugerencia)
+            # Col 6: Sugerencia (icono + color)
             sug = res.get("sugerencia", "Incluir")
             if sug == "Incluir":
                 sug_txt, sug_color = "✔ Incluir", COLORS.success
             else:
                 sug_txt, sug_color = "✗ Excluir", COLORS.danger
+            ctk.CTkLabel(fila_frame, text=sug_txt, font=(FONTS.family, FONTS.size_xs, "bold"), text_color=sug_color, anchor="center").grid(row=0, column=6, sticky="ew", padx=6, pady=8)
 
-            ctk.CTkLabel(
-                tabla,
-                text=sug_txt,
-                font=(FONTS.family, FONTS.size_xs, "bold"),
-                text_color=sug_color,
-                fg_color=bg,
-                anchor="center"
-            ).grid(row=ri, column=6, sticky="nsew", padx=0, pady=1, ipady=12)
+        ctk.CTkFrame(card, fg_color="transparent", height=12).pack()
 
     # ── Scatters ──────────────────────────────────────────────────────────────
     def _build_scatters(self, parent, fila):
@@ -477,136 +415,28 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=16, pady=(0, 4))
         plt.close(fig)
 
-        # ── GUIA VISUAL + PUNTAJES (MEJORADO) ──────────────────────────────────────
-        insight_frame = ctk.CTkFrame(
-            card,
-            fg_color=COLORS.bg_main,
-            corner_radius=12,
-            border_width=1,
-            border_color=COLORS.border
-        )
-        insight_frame.pack(fill="x", padx=16, pady=(8, 16))
-
-        # Header
-        header = ctk.CTkFrame(insight_frame, fg_color="transparent")
-        header.pack(fill="x", padx=14, pady=(10, 6))
-
-        ctk.CTkLabel(
-            header,
-            text="💡 Guía de Interpretación de Sincronía",
-            font=(FONTS.family, FONTS.size_sm, "bold"),
-            text_color=COLORS.primary,
-            anchor="w"
-        ).pack(side="left")
-
-        ctk.CTkLabel(
-            header,
-            text="(0% = sin relación | 100% = comportamiento idéntico)",
-            font=(FONTS.family, 11),
-            text_color=COLORS.text_secondary,
-            anchor="w"
-        ).pack(side="left", padx=(10, 0))
-
-        # Texto corto
+        # NOTA EXPLICATIVA + PUNTAJES
+        insight_frame = ctk.CTkFrame(card, fg_color=COLORS.bg_main, corner_radius=8)
+        insight_frame.pack(fill="x", padx=16, pady=(0, 16))
+        
         ctk.CTkLabel(
             insight_frame,
-            text="Observa si el consumo y las variables suben y bajan al mismo tiempo (Directa) o en sentido contrario (Inversa).",
-            font=(FONTS.family, 11),
-            text_color=COLORS.text_secondary,
-            justify="left",
-            anchor="w",
-            wraplength=800
-        ).pack(fill="x", padx=14, pady=(0, 10))
+            text="💡 Guía Visual: Observa si el consumo y las variables suben y bajan al mismo tiempo (Directa) o en sentido contrario (Inversa).",
+            font=(FONTS.family, FONTS.size_xs, "bold"),
+            text_color=COLORS.primary, anchor="w", wraplength=700, justify="left"
+        ).pack(padx=12, pady=(8, 4), anchor="w")
 
-        # Contenedor de items
-        lista = ctk.CTkFrame(insight_frame, fg_color="transparent")
-        lista.pack(fill="x", padx=14, pady=(0, 12))
-        lista.grid_columnconfigure(0, weight=1)
-
-        def _color_sync(porc):
-            if porc >= 75:
-                return COLORS.success
-            elif porc >= 45:
-                return COLORS.warning
-            return COLORS.danger
-
-        def _nivel_sync(porc):
-            if porc >= 75:
-                return "Alta"
-            elif porc >= 45:
-                return "Media"
-            return "Baja"
-
-        row = 0
+        resumen_sync = []
         for var, d in diagnosticos.items():
-            if var == var_dep:
-                continue
-
-            porc = d["porcentaje"]
-            mensaje = d["mensaje"]
-            col = _color_sync(porc)
-            nivel = _nivel_sync(porc)
-
-            item = ctk.CTkFrame(
-                lista,
-                fg_color=COLORS.bg_card,
-                corner_radius=10,
-                border_width=1,
-                border_color=COLORS.border
-            )
-            item.grid(row=row, column=0, sticky="ew", pady=5)
-            item.grid_columnconfigure(1, weight=1)
-
-            # Badge %
-            badge = ctk.CTkFrame(item, fg_color=col, corner_radius=10)
-            badge.grid(row=0, column=0, padx=12, pady=10, sticky="ns")
-
-            ctk.CTkLabel(
-                badge,
-                text=f"{porc}%",
-                font=(FONTS.family, 12, "bold"),
-                text_color="white"
-            ).pack(padx=10, pady=(6, 0))
-
-            ctk.CTkLabel(
-                badge,
-                text=nivel,
-                font=(FONTS.family, 10, "bold"),
-                text_color="white"
-            ).pack(padx=10, pady=(0, 6))
-
-            # Texto principal
-            texto = ctk.CTkFrame(item, fg_color="transparent")
-            texto.grid(row=0, column=1, sticky="ew", padx=(0, 12), pady=10)
-            texto.grid_columnconfigure(0, weight=1)
-
-            ctk.CTkLabel(
-                texto,
-                text=var,
-                font=(FONTS.family, 12, "bold"),
-                text_color=COLORS.primary,
-                anchor="w"
-            ).grid(row=0, column=0, sticky="w")
-
-            ctk.CTkLabel(
-                texto,
-                text=mensaje,
-                font=(FONTS.family, 11),
-                text_color=COLORS.text_secondary,
-                anchor="w",
-                justify="left",
-                wraplength=700
-            ).grid(row=1, column=0, sticky="w", pady=(2, 0))
-
-            row += 1
-
-        if row == 0:
-            ctk.CTkLabel(
-                lista,
-                text="No hay variables para comparar.",
-                font=(FONTS.family, 11),
-                text_color=COLORS.text_secondary
-            ).grid(row=0, column=0, sticky="w", pady=6)
+            if var == var_dep: continue
+            resumen_sync.append(f"• {var}: {d['porcentaje']}% de sincronía — {d['mensaje']}")
+        
+        txt_sync = "\n".join(resumen_sync) if resumen_sync else "No hay variables para comparar."
+        
+        ctk.CTkLabel(
+            insight_frame, text=txt_sync, font=(FONTS.family, FONTS.size_xs),
+            text_color=COLORS.text_primary, justify="left", anchor="w"
+        ).pack(padx=12, pady=(0, 12), anchor="w")
 
     def _crear_sincronia(self, datos, var_dep):
         fechas = datos["fechas"]
@@ -663,36 +493,13 @@ class ExploratorioResultadosPage(ctk.CTkFrame):
         if ok: messagebox.showinfo("Éxito", f"Excel actualizado en:\n{path}")
 
     def _card(self, parent, fila, titulo):
-        card = ctk.CTkFrame(
-            parent,
-            fg_color=COLORS.bg_card,
-            corner_radius=DIMS.card_radius,
-            border_width=1,
-            border_color=COLORS.border
-        )
-        card.grid(row=fila, column=0, padx=48, pady=6, sticky="ew")
+        card = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=DIMS.card_radius, border_width=1, border_color=COLORS.border)
+        card.grid(row=fila, column=0, padx=48, pady=8, sticky="ew")
         card.grid_columnconfigure(0, weight=1)
-
-        header = ctk.CTkFrame(card, fg_color="transparent", height=32)
-        header.pack(fill="x", padx=16, pady=(10, 0))
-        header.pack_propagate(False)
-
-        ctk.CTkFrame(
-            header,
-            fg_color=COLORS.accent,
-            width=4,
-            corner_radius=2,
-            height=18
-        ).pack(side="left", padx=(0, 10), pady=6)
-
-        ctk.CTkLabel(
-            header,
-            text=titulo,
-            font=(FONTS.family, FONTS.size_lg, "bold"),
-            text_color=COLORS.primary,
-            anchor="w"
-        ).pack(side="left", pady=0)
-
+        header = ctk.CTkFrame(card, fg_color="transparent")
+        header.pack(fill="x", padx=16, pady=(14, 10))
+        ctk.CTkFrame(header, fg_color=COLORS.accent, width=4, corner_radius=2).pack(side="left", fill="y", padx=(0, 10))
+        ctk.CTkLabel(header, text=titulo, font=(FONTS.family, FONTS.size_sm, "bold"), text_color=COLORS.primary, anchor="w").pack(side="left")
         return card
 
     def _color_r(self, r):
