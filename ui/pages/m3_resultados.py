@@ -623,17 +623,21 @@ class M3ResultadosPage(ctk.CTkFrame):
         ax.set_facecolor("#F8FAF9")
 
         fechas  = dfm["FechaStr"].tolist()
-        y_cusum = dfm["CUSUM"].values
-
-        for i in range(len(y_cusum) - 1):
-            c = COLORS.success if y_cusum[i+1] <= y_cusum[i] else COLORS.danger
-            ax.plot(fechas[i:i+2], y_cusum[i:i+2], color=c, linewidth=2.5, marker="o", markersize=4)
-
-        ax.axhline(0, color=COLORS.primary, linestyle='--', alpha=0.3)
-        plt.xticks(rotation=30, ha="right", fontsize=8)
-        plt.tight_layout()
-
-        FigureCanvasTkAgg(fig, master=card).get_tk_widget().pack(fill="both", padx=10, pady=10)
+        cusum = dfm["CUSUM"].tolist()
+        años_list = dfm["Fecha_DT"].dt.year.tolist()
+        
+        for i in range(1, len(cusum)):
+            # Solo dibujar segmento si es el mismo año
+            if años_list[i] == años_list[i-1]:
+                c = COLORS.success if cusum[i] <= cusum[i-1] else COLORS.danger
+                ax.plot(fechas[i-1:i+1], cusum[i-1:i+1], color=c, linewidth=2.5, marker="o", markersize=4)
+            else:
+                # Punto inicial del nuevo ciclo
+                ax.plot([fechas[i]], [cusum[i]], color=COLORS.primary, marker="o", markersize=4)
+            
+        ax.axhline(0, color=COLORS.primary, alpha=0.3, linestyle=":")
+        plt.xticks(rotation=30, ha="right", fontsize=8); plt.tight_layout()
+        FigureCanvasTkAgg(fig, master=card).get_tk_widget().pack(fill="both", padx=10, pady=(0, 10))
 
     def _abrir_grafica_interactiva(self, dfm, tipo):
         try:
