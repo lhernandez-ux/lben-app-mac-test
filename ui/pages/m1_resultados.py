@@ -587,7 +587,6 @@ class M1ResultadosPage(ctk.CTkFrame):
                                           border_width=1, border_color=COLORS.border)
         h_scroll.configure(width=1200)
         h_scroll.pack(pady=(0, 20))
-        h_scroll.pack_configure(anchor="center")
 
         inner_tbl = ctk.CTkFrame(h_scroll, fg_color="transparent")
         inner_tbl.pack(fill="both", expand=True)
