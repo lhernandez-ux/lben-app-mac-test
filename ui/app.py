@@ -19,6 +19,15 @@ class App(ctk.CTk):
         self.configure(fg_color=COLORS.bg_main)
 
         # ── Estado global de sesión ───────────────────────────────────────────
+        self._init_session()
+
+        # ── Contenedor principal ──────────────────────────────────────────────
+        self._frame_actual = None
+        self._iniciar_navegacion()
+
+    # ── Navegación ────────────────────────────────────────────────────────────
+    def _init_session(self):
+        """Inicializa o resetea el estado de la aplicación."""
         self.session = {
             "ruta": None,               # "exploratorio" | "modelado" | "monitoreo"
             "proyecto_nombre": None,
@@ -31,11 +40,11 @@ class App(ctk.CTk):
             "resultados_exploratorio": None,
         }
 
-        # ── Contenedor principal ──────────────────────────────────────────────
-        self._frame_actual = None
-        self._iniciar_navegacion()
+    def reiniciar_app(self):
+        """Limpia los datos de sesión y vuelve al Home."""
+        self._init_session()
+        self.navegar("home")
 
-    # ── Navegación ────────────────────────────────────────────────────────────
     def _iniciar_navegacion(self):
         self.navegar("home")
 

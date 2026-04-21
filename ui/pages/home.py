@@ -209,6 +209,20 @@ class HomePage(ctk.CTkFrame):
             text_color=COLORS.text_secondary
         ).grid(row=1, column=0, pady=(8, 0))
 
+        # ── Botón RESET (Flotante) ──────────────────────────────────────────
+        ctk.CTkButton(
+            contenido,
+            text="🔄 RESET",
+            font=(FONTS.family, FONTS.size_sm, "bold"),
+            fg_color=COLORS.accent,
+            text_color=COLORS.primary,
+            hover_color="#D4E800",
+            corner_radius=DIMS.button_radius,
+            width=100,
+            height=32,
+            command=self.app.reiniciar_app
+        ).place(relx=0.97, rely=0.97, anchor="se")
+
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _feature_card(self, parent, icono, titulo, subtitulo, col):
         card = ctk.CTkFrame(
