@@ -616,26 +616,34 @@ class M3ResultadosPage(ctk.CTkFrame):
         return chart_card
 
     def _chart_real_vs_base(self, parent, dfm):
-        card = self._chart_container(parent, "Seguimiento Energético: Real vs Meta", "monto", dfm)
+        card = self._chart_container(parent, "Seguimiento Energético: Real vs Base", "monto", dfm)
 
         fig, ax = plt.subplots(figsize=(10, 3.5), facecolor=COLORS.bg_card)
         ax.set_facecolor("#F8FAF9")
 
-        fechas = dfm["FechaStr"].tolist()
-        real   = dfm["Ajustado"].tolist()
-        base   = dfm["lben_mes"].tolist()
-        rmse   = self.res['metrics']['rmse']
+        fechas   = dfm["FechaStr"].tolist()
+        real     = pd.to_numeric(dfm["Ajustado"], errors="coerce").tolist()
+        base     = pd.to_numeric(dfm["lben_mes"], errors="coerce").tolist()
+        rmse     = self.res['metrics']['rmse']
 
         ax.plot(fechas, base, color=COLORS.primary, linestyle="--", label="Línea Base", linewidth=2)
         ax.plot(fechas, real, color=COLORS.azul, marker="o", label="Consumo Real", linewidth=1.5)
 
         base_arr = np.array(base)
         ax.fill_between(fechas, base_arr - 2*rmse, base_arr + 2*rmse,
-                        color=COLORS.primary, alpha=0.1, label="Banda Control")
+                        color=COLORS.primary, alpha=0.1, label="Intervalo de Confianza")
 
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3, fontsize=8)
+        ax.set_ylabel(self.config['unidad'])
+        ax.grid(True, linestyle=":", alpha=0.4)
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.28),
+            ncol=3,
+            fontsize=8,
+            frameon=False
+        )
         plt.xticks(rotation=30, ha="right", fontsize=8)
-        plt.tight_layout()
+        fig.subplots_adjust(bottom=0.32, left=0.08, right=0.98, top=0.95)
 
         FigureCanvasTkAgg(fig, master=card).get_tk_widget().pack(fill="both", padx=10, pady=10)
 
@@ -645,21 +653,42 @@ class M3ResultadosPage(ctk.CTkFrame):
         fig, ax = plt.subplots(figsize=(10, 3.5), facecolor=COLORS.bg_card)
         ax.set_facecolor("#F8FAF9")
 
-        fechas  = dfm["FechaStr"].tolist()
-        cusum = dfm["CUSUM"].tolist()
+        fechas    = dfm["FechaStr"].tolist()
+        cusum     = dfm["CUSUM"].tolist()
         años_list = dfm["Fecha_DT"].dt.year.tolist()
-        
+
         for i in range(1, len(cusum)):
-            # Solo dibujar segmento si es el mismo año
-            if años_list[i] == años_list[i-1]:
-                c = COLORS.success if cusum[i] <= cusum[i-1] else COLORS.danger
-                ax.plot(fechas[i-1:i+1], cusum[i-1:i+1], color=c, linewidth=2.5, marker="o", markersize=4)
+            if años_list[i] == años_list[i - 1]:
+                c = COLORS.success if cusum[i] <= cusum[i - 1] else COLORS.danger
+                ax.plot(fechas[i - 1:i + 1], cusum[i - 1:i + 1],
+                        color=c, linewidth=2.5, marker="o", markersize=4)
             else:
-                # Punto inicial del nuevo ciclo
-                ax.plot([fechas[i]], [cusum[i]], color=COLORS.primary, marker="o", markersize=4)
-            
+                ax.plot([fechas[i]], [cusum[i]],
+                        color=COLORS.primary, marker="o", markersize=4)
+
         ax.axhline(0, color=COLORS.primary, alpha=0.3, linestyle=":")
-        plt.xticks(rotation=30, ha="right", fontsize=8); plt.tight_layout()
+        ax.set_ylabel(f"Acumulado ({self.config['unidad']})")
+
+        # Leyenda manual
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0], color=COLORS.success, linewidth=2.5, marker="o",
+                markersize=4, label="Ahorro"),
+            Line2D([0], [0], color=COLORS.danger, linewidth=2.5, marker="o",
+                markersize=4, label="Sobreconsumo"),
+        ]
+        ax.legend(
+            handles=legend_elements,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.28),
+            ncol=2,
+            fontsize=8,
+            frameon=False
+        )
+
+        plt.xticks(rotation=30, ha="right", fontsize=8)
+        fig.subplots_adjust(bottom=0.32, left=0.08, right=0.98, top=0.95)
+
         FigureCanvasTkAgg(fig, master=card).get_tk_widget().pack(fill="both", padx=10, pady=(0, 10))
 
     def _abrir_grafica_interactiva(self, dfm, tipo):
@@ -667,27 +696,75 @@ class M3ResultadosPage(ctk.CTkFrame):
             fig    = go.Figure()
             fechas = dfm["FechaStr"].tolist()
             if tipo == "monto":
-                fig.add_trace(go.Scatter(x=fechas, y=dfm["lben_mes"], name="Línea Base",
-                                         line=dict(dash='dash', color='#2E7D32')))
-                fig.add_trace(go.Scatter(x=fechas, y=dfm["Ajustado"], name="Consumo Ajustado",
-                                         mode='lines+markers', line=dict(color="#2F7BD3")))
-                fig.update_layout(title="Comparativa Consumo vs Línea Base",
-                                  xaxis_title="Mes", yaxis_title="kWh")
+                lben = pd.to_numeric(dfm["lben_mes"], errors="coerce")
+                real = pd.to_numeric(dfm["Ajustado"], errors="coerce")
+
+                fig.add_trace(go.Scatter(x=fechas, y=lben, name="Línea Base",
+                                        line=dict(dash='dash', color='#2E7D32')))
+                fig.add_trace(go.Scatter(x=fechas, y=real, name="Consumo Real",
+                                        mode='lines+markers', line=dict(color="#2F7BD3")))
+                fig.add_trace(go.Scatter(
+                    x=fechas + fechas[::-1],
+                    y=list(lben * 1.1) + list(lben * 0.9)[::-1],
+                    fill="toself", fillcolor="rgba(30,100,60,0.08)",
+                    line=dict(color="rgba(0,0,0,0)"), name="Intervalo de Confianza"))
+
+                fig.update_layout(
+                    title="Seguimiento Energético: Real vs Base",
+                    xaxis_title="Período",
+                    yaxis_title=self.config['unidad'],
+                    template="plotly_white",
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.25,
+                        xanchor="center",
+                        x=0.5
+                    )
+                )
             else:
                 y_vals    = dfm["CUSUM"].values
                 años_list = dfm["Fecha_DT"].dt.year.tolist()
-                for i in range(len(y_vals)-1):
-                    if años_list[i] == años_list[i+1]:
-                        color = 'rgb(44,160,44)' if y_vals[i+1] <= y_vals[i] else 'rgb(214,39,40)'
-                        fig.add_trace(go.Scatter(x=[fechas[i], fechas[i+1]], y=[y_vals[i], y_vals[i+1]],
-                                                 mode='lines+markers', line=dict(color=color, width=4),
-                                                 showlegend=False))
+                for i in range(len(y_vals) - 1):
+                    if años_list[i] == años_list[i + 1]:
+                        color = 'rgb(44,160,44)' if y_vals[i + 1] <= y_vals[i] else 'rgb(214,39,40)'
+                        fig.add_trace(go.Scatter(x=[fechas[i], fechas[i + 1]], y=[y_vals[i], y_vals[i + 1]],
+                                                mode='lines+markers', line=dict(color=color, width=4),
+                                                showlegend=False))
                     else:
                         fig.add_trace(go.Scatter(x=[fechas[i]], y=[y_vals[i]], mode='markers',
-                                                 marker=dict(color='gray', size=8), showlegend=False))
+                                                marker=dict(color='gray', size=8), showlegend=False))
+
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None],
+                    mode="lines+markers",
+                    line=dict(color="rgb(44,160,44)", width=4),
+                    marker=dict(color="rgb(44,160,44)", size=8),
+                    name="Ahorro"
+                ))
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None],
+                    mode="lines+markers",
+                    line=dict(color="rgb(214,39,40)", width=4),
+                    marker=dict(color="rgb(214,39,40)", size=8),
+                    name="Sobreconsumo"
+                ))
+
                 fig.add_hline(y=0, line_dash="dash", line_color="gray")
-                fig.update_layout(title="Desempeño Energético Acumulado (CUSUM)",
-                                  xaxis_title="Mes", yaxis_title="kWh Acumulado")
+                fig.update_layout(
+                    title="Desempeño Energético Acumulado",
+                    xaxis_title="Período",
+                    yaxis_title=f"Acumulado ({self.config['unidad']})",
+                    template="plotly_white",
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.25,
+                        xanchor="center",
+                        x=0.5
+                    )
+                )
+
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
             fig.write_html(tmp.name)
             webbrowser.open(f"file://{tmp.name}")

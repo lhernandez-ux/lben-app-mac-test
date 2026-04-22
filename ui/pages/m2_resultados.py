@@ -372,7 +372,7 @@ class M2ResultadosPage(ctk.CTkFrame):
 
         # D. Banda de confianza
         ax.fill_between(x_ticks, self.df_lben["lim_inf"], self.df_lben["lim_sup"],
-                        color=COLORS.primary, alpha=0.1, label="Confianza (±)")
+                        color=COLORS.primary, alpha=0.1, label="Intervalo Confianza")
 
         ax.set_xticks(x_ticks)
         ax.set_xticklabels(MESES_NOMBRES)
@@ -457,7 +457,7 @@ class M2ResultadosPage(ctk.CTkFrame):
             fig.add_trace(go.Scatter(
                 x=x_ticks + x_ticks[::-1], y=lim_sup + lim_inf[::-1],
                 fill="toself", fillcolor="rgba(30,100,60,0.1)",
-                line=dict(color="rgba(0,0,0,0)"), name="Confianza"))
+                line=dict(color="rgba(0,0,0,0)"), name="Intervalo de Confianza"))
             fig.update_xaxes(tickvals=x_ticks, ticktext=MESES_NOMBRES)
             fig.update_layout(title="Comportamiento Línea Base M2 — Interactivo",
                               template="plotly_white", xaxis_title="Mes",
@@ -646,11 +646,9 @@ class M2ResultadosPage(ctk.CTkFrame):
         self._chart_cusum(scroll, dfm)
 
     def _chart_seguimiento(self, parent, dfm):
-        # Gráfico 1: Seguimiento Real vs Meta
         h1 = ctk.CTkFrame(parent, fg_color="transparent")
         h1.pack(fill="both", expand=True, padx=20, pady=10)
 
-        # 1. Header con Botón Interactivo
         header = ctk.CTkFrame(h1, fg_color="transparent")
         header.pack(fill="x", pady=(0, 15))
 
@@ -661,57 +659,70 @@ class M2ResultadosPage(ctk.CTkFrame):
         ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
             .place(x=12, y=5)
 
-        ctk.CTkLabel(title, text="Seguimiento Energético: Real vs Meta",
+        ctk.CTkLabel(title, text="Seguimiento Energético: Real vs Base",
                     font=(FONTS.family, FONTS.size_lg, "bold"),
                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
         ctk.CTkButton(header, text="🌐 Ver interactivo", font=(FONTS.family, 10, "bold"),
-                      fg_color="transparent", border_width=1,
-                      border_color=COLORS.primary, text_color=COLORS.primary, height=28,
-                      command=lambda: self._plotly_seguimiento(dfm)).pack(side="right")
+                    fg_color="transparent", border_width=1,
+                    border_color=COLORS.primary, text_color=COLORS.primary, height=28,
+                    command=lambda: self._plotly_seguimiento(dfm)).pack(side="right")
+
         frame = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12,
-                             border_width=1, border_color=COLORS.border)
+                            border_width=1, border_color=COLORS.border)
         frame.pack(fill="x", pady=5)
 
         fig, ax = plt.subplots(figsize=(10, 3.5), facecolor=COLORS.bg_card)
         ax.set_facecolor("#F8FAF9")
         fechas = dfm["FechaStr"].tolist()
-        lben   = pd.to_numeric(dfm["LBEn_Ratio"],    errors="coerce").tolist()
-        real   = pd.to_numeric(dfm["Cociente_Real"],  errors="coerce").tolist()
+        lben   = pd.to_numeric(dfm["LBEn_Ratio"],   errors="coerce").tolist()
+        real   = pd.to_numeric(dfm["Cociente_Real"], errors="coerce").tolist()
+
         ax.plot(fechas, lben, color=COLORS.primary, linestyle="--", linewidth=2,
-                label="Línea Meta")
+                label="Línea Base")
         ax.plot(fechas, real, color=COLORS.azul, marker="o", markersize=5,
                 linewidth=1.5, label="Cociente Real")
+
         lben_arr = np.array(lben, dtype=float)
         ax.fill_between(fechas, lben_arr * 0.9, lben_arr * 1.1,
-                        color=COLORS.primary, alpha=0.07, label="Zona de Control")
-        ax.set_ylabel("Cociente (E/Var)")
+                        color=COLORS.primary, alpha=0.07, label="Intervalo de Confianza")
+
+        ax.set_ylabel("Cociente (E / Var. Relevante)")
         ax.grid(True, linestyle=":", alpha=0.4)
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3, fontsize=8)
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.28),
+            ncol=3,
+            fontsize=8,
+            frameon=False
+        )
         plt.xticks(rotation=45, ha="right", fontsize=8)
-        plt.tight_layout()
+        fig.subplots_adjust(bottom=0.32, left=0.08, right=0.98, top=0.95)
+
         FigureCanvasTkAgg(fig, master=frame).get_tk_widget().pack(
             fill="both", expand=True, padx=10, pady=10)
+
 
     def _chart_cusum(self, parent, dfm):
         header = ctk.CTkFrame(parent, fg_color="transparent")
         header.pack(fill="x", pady=(20, 5))
-        
+
         title_cusum = ctk.CTkFrame(header, fg_color=COLORS.primary, height=38, corner_radius=8)
         title_cusum.pack(side="left", padx=(0, 10))
         title_cusum.pack_propagate(True)
 
         ctk.CTkFrame(title_cusum, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
             .place(x=12, y=5)
-        
+
         ctk.CTkLabel(title_cusum, text="Desempeño energético Acumulado",
                     font=(FONTS.family, FONTS.size_lg, "bold"),
                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
         ctk.CTkButton(header, text="🌐 Ver interactivo", font=(FONTS.family, 10, "bold"),
-                      fg_color="transparent", border_width=1,
-                      border_color=COLORS.primary, text_color=COLORS.primary, height=28,
-                      command=lambda: self._plotly_cusum(dfm)).pack(side="right")
+                    fg_color="transparent", border_width=1,
+                    border_color=COLORS.primary, text_color=COLORS.primary, height=28,
+                    command=lambda: self._plotly_cusum(dfm)).pack(side="right")
+
         frame = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12,
-                             border_width=1, border_color=COLORS.border)
+                            border_width=1, border_color=COLORS.border)
         frame.pack(fill="x", pady=5)
 
         fig, ax = plt.subplots(figsize=(10, 3.5), facecolor=COLORS.bg_card)
@@ -719,79 +730,137 @@ class M2ResultadosPage(ctk.CTkFrame):
         fechas = dfm["FechaStr"].tolist()
         cusum  = pd.to_numeric(dfm["CUSUM_kWh"], errors="coerce").tolist()
         años   = dfm["Fecha_DT"].dt.year.tolist()
-        # Color por tramo según pendiente y EVITAR unión Dic-Ene
+
         for i in range(1, len(fechas)):
-            if años[i] == años[i-1]:
-                # Si el valor actual es mayor al anterior, la pendiente sube (mal -> rojo)
-                c = COLORS.danger if cusum[i] > cusum[i-1] else COLORS.success
-                ax.plot(fechas[i-1:i+1], cusum[i-1:i+1], color=c, linewidth=2, marker="o", markersize=4)
+            if años[i] == años[i - 1]:
+                c = COLORS.danger if cusum[i] > cusum[i - 1] else COLORS.success
+                ax.plot(fechas[i - 1:i + 1], cusum[i - 1:i + 1],
+                        color=c, linewidth=2, marker="o", markersize=4)
             else:
-                # Punto inicial del nuevo ciclo
-                ax.plot([fechas[i]], [cusum[i]], color=COLORS.primary, marker="o", markersize=4)
+                ax.plot([fechas[i]], [cusum[i]],
+                        color=COLORS.primary, marker="o", markersize=4)
+
         ax.axhline(0, color=COLORS.primary, linestyle="--", alpha=0.5)
-        ax.set_ylabel("CUSUM (kWh)")
+        ax.set_ylabel(f"Acumulado ({self.config['unidad']})")
         ax.grid(True, linestyle=":", alpha=0.4)
+
+        # Leyenda manual
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0], color=COLORS.success, linewidth=2, marker="o",
+                markersize=4, label="Ahorro"),
+            Line2D([0], [0], color=COLORS.danger, linewidth=2, marker="o",
+                markersize=4, label="Sobreconsumo"),
+        ]
+        ax.legend(
+            handles=legend_elements,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.28),
+            ncol=2,
+            fontsize=8,
+            frameon=False
+        )
         plt.xticks(rotation=45, ha="right", fontsize=8)
-        plt.tight_layout()
+        fig.subplots_adjust(bottom=0.32, left=0.08, right=0.98, top=0.95)
+
         FigureCanvasTkAgg(fig, master=frame).get_tk_widget().pack(
             fill="both", expand=True, padx=10, pady=10)
+
 
     def _plotly_seguimiento(self, dfm):
         try:
             fechas = dfm["FechaStr"].tolist()
+            lben   = pd.to_numeric(dfm["LBEn_Ratio"],   errors="coerce")
+            real   = pd.to_numeric(dfm["Cociente_Real"], errors="coerce")
+
             fig = go.Figure()
-            lben = pd.to_numeric(dfm["LBEn_Ratio"],   errors="coerce")
-            real = pd.to_numeric(dfm["Cociente_Real"], errors="coerce")
             fig.add_trace(go.Scatter(x=fechas, y=lben, mode="lines",
-                                     name="Línea Meta",
-                                     line=dict(color=COLORS.primary, dash="dash", width=2)))
+                                    name="Línea Base",
+                                    line=dict(color=COLORS.primary, dash="dash", width=2)))
             fig.add_trace(go.Scatter(x=fechas, y=real, mode="lines+markers",
-                                     name="Cociente Real",
-                                     line=dict(color=COLORS.azul, width=2),
-                                     marker=dict(size=6)))
-            # Banda de zona de control
+                                    name="Cociente Real",
+                                    line=dict(color=COLORS.azul, width=2),
+                                    marker=dict(size=6)))
             fig.add_trace(go.Scatter(
                 x=fechas + fechas[::-1],
                 y=list(lben * 1.1) + list(lben * 0.9)[::-1],
                 fill="toself", fillcolor="rgba(30,100,60,0.08)",
-                line=dict(color="rgba(0,0,0,0)"), name="Zona de Control"))
-            fig.update_layout(title="Seguimiento Energético: Real vs Meta — Interactivo",
-                              xaxis_title="Período", yaxis_title="Cociente (E/Var)",
-                              template="plotly_white",
-                              legend=dict(orientation="h", yanchor="bottom", y=-0.3))
+                line=dict(color="rgba(0,0,0,0)"), name="Intervalo de Confianza"))
+
+            fig.update_layout(
+                title="Seguimiento Energético: Real vs Base",
+                xaxis_title="Período",
+                yaxis_title="Cociente (E / Var. Relevante)",
+                template="plotly_white",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.25,
+                    xanchor="center",
+                    x=0.5
+                )
+            )
             tmp = os.path.join(tempfile.gettempdir(), "seguimiento_m2.html")
             fig.write_html(tmp)
             webbrowser.open(f"file:///{tmp}")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo abrir el gráfico:\n{e}")
 
+
     def _plotly_cusum(self, dfm):
         try:
             fechas = dfm["FechaStr"].tolist()
             cusum  = pd.to_numeric(dfm["CUSUM_kWh"], errors="coerce").tolist()
             años   = dfm["Fecha_DT"].dt.year.tolist()
+
             fig = go.Figure()
-            
-            for i in range(len(cusum)-1):
-                # Solo dibujar segmento si es el mismo año
-                if años[i] == años[i+1]:
-                    c = 'rgb(44, 160, 44)' if cusum[i+1] <= cusum[i] else 'rgb(214, 39, 40)'
+
+            for i in range(len(cusum) - 1):
+                if años[i] == años[i + 1]:
+                    c = 'rgb(44,160,44)' if cusum[i + 1] <= cusum[i] else 'rgb(214,39,40)'
                     fig.add_trace(go.Scatter(
-                        x=[fechas[i], fechas[i+1]], 
-                        y=[cusum[i], cusum[i+1]],
-                        mode="lines+markers", 
-                        line=dict(color=c, width=4), 
-                        showlegend=False
-                    ))
+                        x=[fechas[i], fechas[i + 1]],
+                        y=[cusum[i], cusum[i + 1]],
+                        mode="lines+markers",
+                        line=dict(color=c, width=4),
+                        showlegend=False))
                 else:
-                    # Punto final de año
-                    fig.add_trace(go.Scatter(x=[fechas[i]], y=[cusum[i]], mode='markers', 
-                                             marker=dict(color='gray', size=8), showlegend=False))
-            
+                    fig.add_trace(go.Scatter(
+                        x=[fechas[i]], y=[cusum[i]],
+                        mode="markers",
+                        marker=dict(color="gray", size=8),
+                        showlegend=False))
+
+            # Trazos dummy para leyenda
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode="lines+markers",
+                line=dict(color="rgb(44,160,44)", width=4),
+                marker=dict(color="rgb(44,160,44)", size=8),
+                name="Ahorro"
+            ))
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode="lines+markers",
+                line=dict(color="rgb(214,39,40)", width=4),
+                marker=dict(color="rgb(214,39,40)", size=8),
+                name="Sobreconsumo"
+            ))
+
             fig.add_hline(y=0, line_dash="dash", line_color=COLORS.primary, opacity=0.5)
-            fig.update_layout(title="CUSUM — Desempeño Energético Acumulado — Interactivo",
-                              xaxis_title="Período", yaxis_title="CUSUM (kWh)",
-                              template="plotly_white")
+            fig.update_layout(
+                title="Desempeño Energético Acumulado ",
+                xaxis_title="Período",
+                yaxis_title=f"Acumulado ({self.config['unidad']})",
+                template="plotly_white",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.25,
+                    xanchor="center",
+                    x=0.5
+                )
+            )
             tmp = os.path.join(tempfile.gettempdir(), "cusum_m2.html")
             fig.write_html(tmp)
             webbrowser.open(f"file:///{tmp}")

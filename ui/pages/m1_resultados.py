@@ -673,36 +673,50 @@ class M1ResultadosPage(ctk.CTkFrame):
         ctk.CTkFrame(title, fg_color=COLORS.accent, width=4, height=20, corner_radius=2)\
             .place(x=12, y=5)
 
-        ctk.CTkLabel(title, text="Seguimiento Energético: Real vs Meta",
+        ctk.CTkLabel(title, text="Seguimiento Energético: Real vs Base",
                     font=(FONTS.family, FONTS.size_lg, "bold"),
                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
+
         ctk.CTkButton(header, text="🌐 Ver interactivo",
-                      font=(FONTS.family, 10, "bold"),
-                      fg_color="transparent", border_width=1,
-                      border_color=COLORS.primary, text_color=COLORS.primary, height=28,
-                      command=self._abrir_plotly_seguimiento).pack(side="right")
+                    font=(FONTS.family, 10, "bold"),
+                    fg_color="transparent", border_width=1,
+                    border_color=COLORS.primary, text_color=COLORS.primary, height=28,
+                    command=self._abrir_plotly_seguimiento).pack(side="right")
 
         frame = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12,
-                             border_width=1, border_color=COLORS.border)
+                            border_width=1, border_color=COLORS.border)
         frame.pack(fill="x", pady=5)
 
         fig, ax = plt.subplots(figsize=(10, 3.5), facecolor=COLORS.bg_card)
         ax.set_facecolor("#F8FAF9")
+
         fechas = self.df_mon['Fecha']
         lben   = self.df_mon['LBEn_Mes']
         real   = self.df_mon['Ajustado']
+
         ax.plot(fechas, lben, color=COLORS.primary, linestyle='--', linewidth=2,
-                label="Línea Meta")
+                label="Línea Base")
         ax.plot(fechas, real, color=COLORS.azul, marker='o', markersize=5,
                 linewidth=1.5, label="Consumo Real")
+
         lben_arr = np.array(lben, dtype=float)
         ax.fill_between(fechas, lben_arr * 0.9, lben_arr * 1.1,
-                        color=COLORS.primary, alpha=0.07, label="Zona de Control")
-        ax.set_ylabel("kWh")
+                        color=COLORS.primary, alpha=0.07, label="Intervalo de Confianza")
+
+        ax.set_ylabel(self.config['unidad'])
         ax.grid(True, linestyle=':', alpha=0.4)
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=3, fontsize=8)
+
+        ax.legend(
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.28),
+            ncol=3,
+            fontsize=8,
+            frameon=False
+        )
+
         plt.xticks(rotation=45, ha='right', fontsize=8)
-        plt.tight_layout()
+        fig.subplots_adjust(bottom=0.32, left=0.07, right=0.98, top=0.95)
+
         FigureCanvasTkAgg(fig, master=frame).get_tk_widget().pack(
             fill="both", expand=True, padx=10, pady=10)
 
@@ -721,13 +735,13 @@ class M1ResultadosPage(ctk.CTkFrame):
                     font=(FONTS.family, FONTS.size_lg, "bold"),
                     text_color=COLORS.text_white).pack(side="left", padx=(20, 14))
         ctk.CTkButton(header, text="🌐 Ver interactivo",
-                      font=(FONTS.family, 10, "bold"),
-                      fg_color="transparent", border_width=1,
-                      border_color=COLORS.primary, text_color=COLORS.primary, height=28,
-                      command=self._abrir_plotly_cusum).pack(side="right")
+                    font=(FONTS.family, 10, "bold"),
+                    fg_color="transparent", border_width=1,
+                    border_color=COLORS.primary, text_color=COLORS.primary, height=28,
+                    command=self._abrir_plotly_cusum).pack(side="right")
 
         frame = ctk.CTkFrame(parent, fg_color=COLORS.bg_card, corner_radius=12,
-                             border_width=1, border_color=COLORS.border)
+                            border_width=1, border_color=COLORS.border)
         frame.pack(fill="x", pady=5)
 
         fig, ax = plt.subplots(figsize=(10, 3.5), facecolor=COLORS.bg_card)
@@ -749,11 +763,29 @@ class M1ResultadosPage(ctk.CTkFrame):
                         color=COLORS.primary, marker='o', markersize=4)
 
         ax.axhline(0, color=COLORS.primary, linestyle='--', alpha=0.5)
-        ax.set_ylabel(f"Acumulado ({self.config['unidad']})")  # ← agrega
-        ax.set_xlabel("Fecha")  
+        ax.set_ylabel(f"Acumulado ({self.config['unidad']})")
         ax.grid(True, linestyle=':', alpha=0.4)
+
+        # ── Leyenda manual con líneas de color ──────────────────────────────
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0], color=COLORS.success, linewidth=2, marker='o',
+                markersize=4, label="Ahorro"),
+            Line2D([0], [0], color=COLORS.danger,  linewidth=2, marker='o',
+                markersize=4, label="Sobreconsumo"),
+        ]
+        ax.legend(
+            handles=legend_elements,
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.28),
+            ncol=2,
+            fontsize=8,
+            frameon=False
+        )
+
         plt.xticks(rotation=45, ha='right', fontsize=8)
-        plt.tight_layout()
+        fig.subplots_adjust(bottom=0.32, left=0.08, right=0.98, top=0.95)
+
         FigureCanvasTkAgg(fig, master=frame).get_tk_widget().pack(
             fill="both", expand=True, padx=10, pady=10)
 
@@ -768,10 +800,10 @@ class M1ResultadosPage(ctk.CTkFrame):
                 y=list(lben * 1.1) + list(lben * 0.9)[::-1],
                 fill='toself', fillcolor='rgba(0,100,80,0.08)',
                 line=dict(color='rgba(0,0,0,0)'),
-                name='Zona Control (±10%)', hoverinfo='skip'))
+                name='Intervalo de Confianza', hoverinfo='skip'))
             fig.add_trace(go.Scatter(
                 x=fechas, y=lben, mode='lines',
-                name='LBEn (Meta)',
+                name='Línea Base',
                 line=dict(color=COLORS.primary, dash='dash', width=2)))
             fig.add_trace(go.Scatter(
                 x=fechas, y=real, mode='lines+markers',
@@ -779,7 +811,7 @@ class M1ResultadosPage(ctk.CTkFrame):
                 line=dict(color=COLORS.azul, width=2),
                 marker=dict(size=6)))
             fig.update_layout(
-                title="Seguimiento Energético: Real vs Meta — Interactivo",
+                title="Seguimiento Energético: Real vs Base ",
                 xaxis_title="Fecha", yaxis_title=self.config['unidad'],
                 template="plotly_white",
                 legend=dict(orientation="h", yanchor="bottom", y=-0.3))
@@ -799,6 +831,8 @@ class M1ResultadosPage(ctk.CTkFrame):
                 except: return 0
 
             fig = go.Figure()
+
+            # Trazos del gráfico (sin leyenda individual)
             for i in range(len(y_cusum) - 1):
                 if get_yr(fechas[i]) == get_yr(fechas[i + 1]):
                     c = 'rgb(44,160,44)' if y_cusum[i + 1] <= y_cusum[i] else 'rgb(214,39,40)'
@@ -814,14 +848,43 @@ class M1ResultadosPage(ctk.CTkFrame):
                         mode='markers',
                         marker=dict(color='gray', size=8),
                         showlegend=False))
+
+            # ── Trazos dummy solo para la leyenda ───────────────────────────
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode='lines+markers',
+                line=dict(color='rgb(44,160,44)', width=4),
+                marker=dict(color='rgb(44,160,44)', size=8),
+                name='Ahorro'
+            ))
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode='lines+markers',
+                line=dict(color='rgb(214,39,40)', width=4),
+                marker=dict(color='rgb(214,39,40)', size=8),
+                name='Sobreconsumo'
+            ))
+
             fig.add_hline(y=0, line_dash='dash', line_color=COLORS.primary, opacity=0.5)
+
             fig.update_layout(
-                title="CUSUM — Desempeño Energético Acumulado — Interactivo",
-                xaxis_title="Fecha", yaxis_title="kWh Acumulado",
-                template="plotly_white")
+                title="Desempeño Energético Acumulado",
+                xaxis_title="Fecha",
+                yaxis_title=f"Acumulado ({self.config['unidad']})",
+                template="plotly_white",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.25,
+                    xanchor="center",
+                    x=0.5
+                )
+            )
+
             tmp = os.path.join(tempfile.gettempdir(), "cusum_m1.html")
             fig.write_html(tmp)
             webbrowser.open(f"file:///{tmp}")
+
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo abrir el gráfico:\n{e}")
 
