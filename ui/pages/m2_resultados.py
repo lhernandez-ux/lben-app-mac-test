@@ -572,27 +572,40 @@ class M2ResultadosPage(ctk.CTkFrame):
         inner_tbl = ctk.CTkFrame(h_scroll, fg_color="transparent")
         inner_tbl.pack(fill="both", expand=True)
 
-        COL_W = 140
+        COL_W = 220
         headers = [
-            "Fecha", "Norm. (kWh)", "Cociente", "LBEn (kWh)", 
-            "Desemp. (kWh)", "Desemp. (%)", "CUSUM (kWh)", 
-            "Avance Pot. (%)", "Avance 15% (%)", 
-            "Econ. ($)", "Eco Acum. ($)", 
-            "Amb. (CO2)", "Amb. Acu (CO2)"
+            "Fecha", 
+            "Consumo Normalizado\n(kWh/30d)", 
+            "Consumo Normalizado y Ajustado\n(kWh)",
+            "Cociente\n(kWh/Var.Relevante)", 
+            "LBEn mes\n(kWh/VarRel)", 
+            "Desempeño Energético\n(kWh)", 
+            "Desempeño Energético\n(%)", 
+            "Desempeño Energético Acumulado\n(kWh)", 
+            "Avance Respecto a Potencial Anual\n(%)", 
+            "Avance Respecto a Meta 15%\nAnual Base (%)", 
+            "Desempeño Económico\n(COP)", 
+            "Desempeño Económico Acumulado\n(COP)", 
+            "Desempeño Ambiental\n(kgCO2e)", 
+            "Desempeño Ambiental Acumulado\n(kgCO2e)"
         ]
         
-        h_frame = ctk.CTkFrame(inner_tbl, fg_color=COLORS.primary, height=35)
+        h_frame = ctk.CTkFrame(inner_tbl, fg_color=COLORS.primary, height=55) # Altura suficiente para wrapping
         h_frame.pack(fill="x")
         for i, h in enumerate(headers):
             ctk.CTkLabel(h_frame, text=h, text_color="white",
-                         font=(FONTS.family, FONTS.size_lg, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
+                         font=(FONTS.family, 11, "bold"), 
+                         width=COL_W, justify="center", wraplength=200).grid(row=0, column=i, padx=5, sticky="nsew")
+        
+        # Compensador de Scrollbar
+        ctk.CTkLabel(h_frame, text="", width=20).grid(row=0, column=len(headers), padx=0)
 
         # 3. Contenedor Vertical para las filas
         v_scroll = ctk.CTkScrollableFrame(inner_tbl, fg_color="transparent", height=320, orientation="vertical")
         v_scroll.pack(fill="both", expand=True)
 
         col_map = [
-            "FechaStr", "Cons_Num", "Cociente_Real", "LBEn_Ratio",
+            "FechaStr", "Normalizado", "Ajustado", "Cociente_Real", "LBEn_Ratio",
             "Desemp_kWh", "Desemp_Pct", "CUSUM_kWh",
             "Avance_Pot", "Avance_15", 
             "Desemp_COP", "CUSUM_COP", "Desemp_CO2", "CUSUM_CO2"
@@ -605,7 +618,6 @@ class M2ResultadosPage(ctk.CTkFrame):
                 color = COLORS.text_primary
                 
                 # Resaltar en rojo/verde columnas de desempeño
-                # Indices: 4(Desemp), 5(%), 6(CUSUM), 9(Econ), 10(Econ Acu), 11(Amb), 12(Amb Acu)
                 if c_idx in [4, 5, 6, 9, 10, 11, 12]:
                     try:
                         # Usamos Desemp_kWh (col 4) para decidir el color de todo el bloque de desempeño
@@ -615,7 +627,7 @@ class M2ResultadosPage(ctk.CTkFrame):
 
                 # Formateo según tipo
                 if c_idx in [5, 7, 8]: # Porcentajes
-                    txt = f"{float(val):.1f}%" if isinstance(val, (int, float)) else str(val)
+                    txt = f"{float(val):.1f}" if isinstance(val, (int, float)) else str(val) # Sin %
                 elif c_idx in [9, 10]: # COP (Sin decimales)
                     txt = f"{float(val):,.0f}" if isinstance(val, (int, float)) else str(val)
                 elif isinstance(val, (int, float)):

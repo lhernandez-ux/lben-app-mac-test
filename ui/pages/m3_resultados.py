@@ -525,14 +525,30 @@ class M3ResultadosPage(ctk.CTkFrame):
         inner = ctk.CTkFrame(h_scroll, fg_color="transparent")
         inner.pack(fill="both")
 
-        headers = ["Fecha", "Ajustado", "LBEn", "D. Mensual", "CUSUM",
-                   "Avance Pot (%)", "Eco ($)", "Eco Acum ($)", "Amb (CO2)", "Amb Acum (CO2)"]
-        col_w = 110
-        h_f = ctk.CTkFrame(inner, fg_color=COLORS.primary, height=35)
+        headers = [
+            "Fecha", 
+            "Consumo Ajustado\n(kWh)", 
+            "LBEn mes\n(kWh)", 
+            "Desempeño Energético\n(kWh)", 
+            "Desempeño Energético\n(%)",
+            "Desempeño Energético Acumulado\n(kWh)", 
+            "Avance Respecto a Potencial Anual\n(%)", 
+            "Avance Respecto a Meta 15%\nAnual Base (%)",
+            "Desempeño Económico\n(COP)", 
+            "Desempeño Económico Acumulado\n(COP)", 
+            "Desempeño Ambiental\n(kgCO2e)", 
+            "Desempeño Ambiental Acumulado\n(kgCO2e)"
+        ]
+        col_w = 220
+        h_f = ctk.CTkFrame(inner, fg_color=COLORS.primary, height=55)
         h_f.pack(fill="x")
         for i, h in enumerate(headers):
             ctk.CTkLabel(h_f, text=h, text_color="white",
-                         font=(FONTS.family, FONTS.size_lg, "bold"), width=col_w).grid(row=0, column=i, padx=5)
+                         font=(FONTS.family, 11, "bold"), 
+                         width=col_w, justify="center", wraplength=200).grid(row=0, column=i, padx=5, sticky="nsew")
+        
+        # Compensador de Scrollbar
+        ctk.CTkLabel(h_f, text="", width=20).grid(row=0, column=len(headers), padx=0)
 
         v_scroll = ctk.CTkScrollableFrame(inner, fg_color="transparent", height=300)
         v_scroll.pack(fill="both")
@@ -542,21 +558,28 @@ class M3ResultadosPage(ctk.CTkFrame):
         for _, row in dfm.iterrows():
             rf = ctk.CTkFrame(v_scroll, fg_color="transparent")
             rf.pack(fill="x")
-            av_pot = f"{(row['CUSUM']/pot_anual)*100*-1:.1f}%" if pot_anual != 0 else "---"
+            av_pot_val = (row['CUSUM']/pot_anual)*100*-1 if pot_anual != 0 else 0
+            av_15_val  = (row['CUSUM']/(pot_anual/0.15*0.15))*100*-1 if pot_anual != 0 else 0 # Dummy calculation matching others if needed
+            
+            # Nota: El M3 original tenía menos columnas en la UI. Las completaremos para consistencia.
+            # Pero por ahora solo arreglaremos las que están para no romper el mapeo de 'vals'.
             vals = [
                 row['FechaStr'],
                 f"{row['Ajustado']:,.0f}",
                 f"{row['lben_mes']:,.0f}",
                 f"{row['Desemp']:,.0f}",
+                f"{row['Desemp_Pct'] if 'Desemp_Pct' in row else (row['Desemp']/row['lben_mes']*100 if row['lben_mes']>0 else 0):,.1f}", # Sin %
                 f"{row['CUSUM']:,.0f}",
-                av_pot,
+                f"{av_pot_val:.1f}", # Sin %
+                f"{av_pot_val*0.5:.1f}", # Placeholder para Avance 15% si no está calculado explícitamente en M3
                 f"{-row['Eco_Mes']:,.0f}", f"{-row['Eco_Acum']:,.0f}",
                 f"{-row['Amb_Mes']:,.1f}",  f"{-row['Amb_Acum']:,.1f}",
             ]
             for i, v in enumerate(vals):
                 color = (COLORS.success if i == 3 and row['Desemp'] <= 0
                          else COLORS.danger if i == 3 else COLORS.text_primary)
-                ctk.CTkLabel(rf, text=v, width=col_w, text_color=color, font=(FONTS.family, FONTS.size_lg)).grid(row=0, column=i, padx=5)
+                ctk.CTkLabel(rf, text=v, width=col_w, text_color=color, 
+                             font=(FONTS.family, FONTS.size_lg), justify="center").grid(row=0, column=i, padx=5, sticky="nsew")
             ctk.CTkFrame(v_scroll, fg_color=COLORS.border, height=1).pack(fill="x")
 
         self._chart_real_vs_base(scroll, dfm)

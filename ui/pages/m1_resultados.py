@@ -591,19 +591,31 @@ class M1ResultadosPage(ctk.CTkFrame):
         inner_tbl = ctk.CTkFrame(h_scroll, fg_color="transparent")
         inner_tbl.pack(fill="both", expand=True)
 
-        COL_W = 135
+        COL_W = 220
         headers = [
-            "Fecha", "Norm. (kWh)", "Adj. (kWh)", "LBEn (kWh)",
-            "Desemp. (kWh)", "Desemp. (%)", "CUSUM (kWh)",
-            "Avance Pot. (%)", "Avance 15% (%)",
-            "Econ.($)", "Econ. Acu. ($)",
-            "Amb. (CO2 )", "Amb. Acu. (CO2)"
+            "Fecha", 
+            "Consumo Normalizado\n(kWh/30d)", 
+            "Consumo Normalizado y Ajustado\n(kWh)", 
+            "LBEn mes\n(kWh)",
+            "Desempeño Energético\n(kWh)", 
+            "Desempeño Energético\n(%)", 
+            "Desempeño Energético Acumulado\n(kWh)",
+            "Avance Respecto a Potencial Anual\n(%)", 
+            "Avance Respecto a Meta 15%\nAnual Base (%)",
+            "Desempeño Económico\n(COP)", 
+            "Desempeño Económico Acumulado\n(COP)",
+            "Desempeño Ambiental\n(kgCO2e)", 
+            "Desempeño Ambiental Acumulado\n(kgCO2e)"
         ]
-        h_frame = ctk.CTkFrame(inner_tbl, fg_color=COLORS.primary, height=35)
+        h_frame = ctk.CTkFrame(inner_tbl, fg_color=COLORS.primary, height=55) # Altura suficiente para wrapping
         h_frame.pack(fill="x")
         for i, h in enumerate(headers):
             ctk.CTkLabel(h_frame, text=h, text_color="white",
-                         font=(FONTS.family, FONTS.size_lg, "bold"), width=COL_W).grid(row=0, column=i, padx=5)
+                         font=(FONTS.family, 11, "bold"), 
+                         width=COL_W, justify="center", wraplength=200).grid(row=0, column=i, padx=5, sticky="nsew")
+        
+        # Compensador de Scrollbar (Derecha)
+        ctk.CTkLabel(h_frame, text="", width=20).grid(row=0, column=len(headers), padx=0)
 
         v_scroll = ctk.CTkScrollableFrame(inner_tbl, fg_color="transparent",
                                           height=320, orientation="vertical")
@@ -621,10 +633,10 @@ class M1ResultadosPage(ctk.CTkFrame):
                 f"{row['Ajustado']:,.1f}",
                 f"{row['LBEn_Mes']:,.1f}",
                 f"{row['Desemp_kWh']:,.1f}",
-                f"{row['Desemp_Pct']:.1f}%",
+                f"{row['Desemp_Pct']:.1f}",     # Sin %
                 f"{row['CUSUM_kWh']:,.1f}",
-                f"{row['Avance_Pot']:.1f}%",
-                f"{row['Avance_15']:.1f}%",
+                f"{row['Avance_Pot']:.1f}",      # Sin %
+                f"{row['Avance_15']:.1f}",       # Sin %
                 f"{row['Desemp_COP']:,.0f}",
                 f"{row['CUSUM_COP']:,.0f}",
                 f"{row['Desemp_CO2']:,.1f}",
@@ -634,8 +646,11 @@ class M1ResultadosPage(ctk.CTkFrame):
                 txt_c = color_des if i in [4, 5, 6, 9, 10, 11, 12] else COLORS.text_primary
                 ctk.CTkLabel(r, text=v, width=COL_W,
                              font=(FONTS.family, FONTS.size_lg),
-                             text_color=txt_c).grid(row=0, column=i, padx=5)
+                             text_color=txt_c, justify="center").grid(row=0, column=i, padx=5, sticky="nsew")
             ctk.CTkFrame(v_scroll, fg_color=COLORS.border, height=1).pack(fill="x")
+        
+        # Compensador inferior (opcional, para cuadrar con el header)
+        # ctk.CTkLabel(r, text="", width=20).grid(row=0, column=len(vals), padx=0)
 
         # ── Gráfico 1: Real vs Meta ──
         self._chart_seguimiento(scroll)
