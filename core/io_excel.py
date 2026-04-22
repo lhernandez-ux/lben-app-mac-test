@@ -322,9 +322,14 @@ def escribir_resultados_exploratorios(path, rec, just, tabla, config):
         print(f"Error escribiendo Excel: {e}")
         return False
 
-def escribir_resultados_m1(path, df_lben, df_mon, df_b_f, df_excl, meta, config):
+def escribir_resultados_m1(path, df_lben, df_mon, df_base_f, df_excluidos, meta, config):
+    if not os.path.exists(path):
+        return False
     wb = load_workbook(path)
     fmt = "#,##0.00"
+    fmt_pct = "0.0%"
+    
+    # 1. Hoja Modelo_LBEn
     ws_mod = wb["Modelo_LBEn"]
     ws_mod["K5"] = "M1 (Consumo Absoluto)"
     ws_mod["M7"].value = meta.get("consumo_promedio_anual", 0)
@@ -333,14 +338,76 @@ def escribir_resultados_m1(path, df_lben, df_mon, df_b_f, df_excl, meta, config)
     ws_mod["M8"].number_format = fmt
     ws_mod["M9"].value = meta.get("potencial_ahorro_pct", 0) / 100
     ws_mod["M9"].number_format = "0.0%"
+
+    # 2. Hoja Monitoreo (L:W → 12:23)
+    if df_mon is not None and not df_mon.empty:
+        ws_mon = wb["Monitoreo"]
+        for i, row in df_mon.iterrows():
+            f = 8 + i
+            # Fecha (B)
+            ws_mon.cell(row=f, column=2, value=row.get('Fecha', ''))
+            
+            # Datos calculados (L a W)
+            mapping = [
+                ('Normalizado', 12), ('Ajustado', 13), ('LBEn_Mes', 14),
+                ('Desemp_kWh', 15),  ('Desemp_Pct', 16), ('CUSUM_kWh', 17),
+                ('Avance_Pot', 18),  ('Avance_15', 19),  ('Desemp_COP', 20),
+                ('CUSUM_COP', 21),   ('Desemp_CO2', 22), ('CUSUM_CO2', 23)
+            ]
+            for col_name, col_idx in mapping:
+                val = row.get(col_name, 0)
+                cell = ws_mon.cell(row=f, column=col_idx, value=val)
+                if col_idx in [16, 18, 19]: # Porcentajes
+                    cell.value = val / 100 if isinstance(val, (int, float)) else 0
+                    cell.number_format = fmt_pct
+                else:
+                    cell.number_format = fmt
+
     wb.save(path)
     return True
 
-def escribir_resultados_m2(path, df_lben, df_mon, df_b_f, df_excl, meta, config):
-    escribir_resultados_m1(path, df_lben, df_mon, df_b_f, df_excl, meta, config)
+def escribir_resultados_m2(path, df_lben, df_mon, df_base_f, df_excluidos, meta, config):
+    if not os.path.exists(path):
+        return False
     wb = load_workbook(path)
+    fmt = "#,##0.00"
+    fmt_pct = "0.0%"
+    
+    # 1. Hoja Modelo_LBEn
     ws_mod = wb["Modelo_LBEn"]
-    ws_mod["K5"] = "M2 (Cociente Normalizado)"
+    ws_mod["K5"] = "M2 (Cociente de Valores Medidos)"
+    ws_mod["M7"].value = meta.get("consumo_promedio_anual", 0)
+    ws_mod["M7"].number_format = fmt
+    ws_mod["M8"].value = meta.get("potencial_ahorro_kwh", 0)
+    ws_mod["M8"].number_format = fmt
+    ws_mod["M9"].value = meta.get("potencial_ahorro_pct", 0) / 100
+    ws_mod["M9"].number_format = "0.0%"
+
+    # 2. Hoja Monitoreo (M:Y → 13:25)
+    if df_mon is not None and not df_mon.empty:
+        ws_mon = wb["Monitoreo"]
+        for i, row in df_mon.iterrows():
+            f = 8 + i
+            # Fecha (B)
+            ws_mon.cell(row=f, column=2, value=row.get('Fecha', ''))
+            
+            # Datos calculados (M a Y)
+            mapping = [
+                ('Normalizado', 13), ('Ajustado', 14), ('Cociente_Real', 15),
+                ('LBEn_Ratio', 16),  ('Desemp_kWh', 17), ('Desemp_Pct', 18),
+                ('CUSUM_kWh', 19),   ('Avance_Pot', 20),  ('Avance_15', 21),
+                ('Desemp_COP', 22),  ('CUSUM_COP', 23),   ('Desemp_CO2', 24),
+                ('CUSUM_CO2', 25)
+            ]
+            for col_name, col_idx in mapping:
+                val = row.get(col_name, 0)
+                cell = ws_mon.cell(row=f, column=col_idx, value=val)
+                if col_idx in [18, 20, 21]: # Porcentajes
+                    cell.value = val / 100 if isinstance(val, (int, float)) else 0
+                    cell.number_format = fmt_pct
+                else:
+                    cell.number_format = fmt
+
     wb.save(path)
     return True
 
