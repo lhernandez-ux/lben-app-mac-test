@@ -134,11 +134,11 @@ def formatear_ecuacion(model, feature_vars):
     feature_vars = [str(v) for v in feature_vars]  # Garantizar strings
     params = model.params
     try:
-        eq = f"y = {params.iloc[0]:.4f}"
+        eq = f"Consumo= {params.iloc[0]:.2f}"
         for i, var in enumerate(feature_vars):
             coef = params.iloc[i + 1]
             signo = "+" if coef >= 0 else "-"
-            eq += f" {signo} {abs(coef):.4f}·{var}"
+            eq += f" {signo} {abs(coef):.2f}·{var}"
     except Exception:
         eq = "Ec. no disponible"
     return eq

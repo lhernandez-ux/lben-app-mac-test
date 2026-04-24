@@ -344,50 +344,62 @@ class M3ResultadosPage(ctk.CTkFrame):
         scroll.grid(row=0, column=0, sticky="nsew")
         scroll.grid_columnconfigure(0, weight=1)
 
+        self.content_view.grid_columnconfigure(0, weight=1)
+
         p = self.res['potenciales']
 
         # ── 1. BLOQUE DE ECUACIONES ──────────────────────────────────────────
-        eq_card = ctk.CTkFrame(scroll, fg_color=COLORS.bg_card, corner_radius=15,
-                               border_width=1, border_color=COLORS.border)
-        eq_card.pack(anchor="center", padx=80, pady=(12, 12), ipadx=10, ipady=5)
+        eq_card = ctk.CTkFrame(
+            scroll,
+            fg_color=COLORS.bg_card,
+            corner_radius=15,
+            border_width=1,
+            border_color=COLORS.border
+        )
+        eq_card.pack(pady=(12, 12), ipadx=20, ipady=8, anchor="center")
 
         self._titulo_seccion(eq_card, "Fórmulas del Modelo Energético")
 
-        eq_inner = ctk.CTkFrame(eq_card, fg_color="transparent")
-        eq_inner.pack(padx=30, pady=(0, 8))
+        eq_container = ctk.CTkFrame(eq_card, fg_color="transparent")
+        eq_container.pack(fill="x", padx=20, pady=(0, 8))
 
         def add_eq_label(master, title, formula, color):
             ctk.CTkLabel(
-                master, text=title,
-                # ← TÍTULOS MÁS GRANDES: subimos de size_lg a 15px bold
+                master,
+                text=title,
                 font=(FONTS.family, 15, "bold"),
                 text_color=color
             ).pack(anchor="center", pady=(8, 0))
 
             ctk.CTkLabel(
-                master, text=formula,
+                master,
+                text=formula,
                 font=(FONTS.family, FONTS.size_xl, "italic"),
                 text_color=COLORS.text_primary,
-                wraplength=700,
+                wraplength=0, 
                 justify="center"
             ).pack(anchor="center", pady=(2, 8))
 
         # Ecuación 1
         add_eq_label(
-            eq_inner, "Línea Base (LBEn):",
+            eq_container,
+            "Línea Base (LBEn):",
             formatear_ecuacion(self.res['model_lben'], self.config['vars_ind']),
             COLORS.primary
         )
 
-        # ── SEPARADOR: usamos un frame con height=1 y ancho explícito ────────
-        # pack con fill="x" + padx es la forma más confiable en CTk
-        ctk.CTkFrame(eq_inner, fg_color=COLORS.border, height=1, corner_radius=0).pack(
-            fill="x", padx=50, pady=(0, 0)
-        )
+        # Separador
+        ctk.CTkFrame(
+            eq_container,
+            fg_color=COLORS.border,
+            height=1,
+            corner_radius=0
+        ).pack(fill="x", padx=50, pady=(0, 0))
 
         # Ecuación 2
         add_eq_label(
-            eq_inner, "Línea Meta (LMEn):",
+            eq_container,
+            "Línea Meta (LMEn):",
             formatear_ecuacion(self.res['model_lmen'], self.config['vars_ind']),
             COLORS.accent
         )
