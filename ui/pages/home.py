@@ -100,10 +100,9 @@ class HomePage(ctk.CTkFrame):
         header = ctk.CTkFrame(
             contenido, fg_color=COLORS.bg_main, corner_radius=0
         )
-        header.grid(row=0, column=0, sticky="ew", padx=48, pady=(40, 0))
+        header.grid(row=0, column=0, sticky="ew", padx=38, pady=(20, 0))
         header.grid_columnconfigure(0, weight=1)
 
-        # Contenedor para Título + Botón Guía
         top_row = ctk.CTkFrame(header, fg_color="transparent")
         top_row.pack(fill="x")
 
@@ -137,10 +136,47 @@ class HomePage(ctk.CTkFrame):
         ).pack(anchor="w", pady=(6, 0))
 
         # ── Cards de features ─────────────────────────────────────────────────
-        features = ctk.CTkFrame(
+        features_wrapper = ctk.CTkFrame(
             contenido, fg_color=COLORS.bg_main, corner_radius=0
         )
-        features.grid(row=1, column=0, sticky="ew", padx=48, pady=(28, 0))
+        features_wrapper.grid(row=1, column=0, sticky="ew", padx=48, pady=(28, 0))
+
+        # -- Título centrado con líneas y barras de color ---------------------
+        title_row = ctk.CTkFrame(features_wrapper, fg_color="transparent")
+        title_row.pack(fill="x", pady=(0, 12))
+        title_row.grid_columnconfigure(0, weight=1)
+        title_row.grid_columnconfigure(1, weight=0)
+        title_row.grid_columnconfigure(2, weight=1)
+
+        ctk.CTkFrame(
+            title_row, fg_color=COLORS.border, height=1
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 10))
+
+        center = ctk.CTkFrame(title_row, fg_color="transparent")
+        center.grid(row=0, column=1)
+
+        ctk.CTkFrame(
+            center, fg_color=COLORS.accent, width=3, height=18, corner_radius=2
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkLabel(
+            center,
+            text="¿Qué incluye la herramienta?",
+            font=(FONTS.family, FONTS.size_sm, "bold"),
+            text_color=COLORS.text_secondary
+        ).pack(side="left")
+
+        ctk.CTkFrame(
+            center, fg_color=COLORS.accent, width=3, height=18, corner_radius=2
+        ).pack(side="left", padx=(8, 0))
+
+        ctk.CTkFrame(
+            title_row, fg_color=COLORS.border, height=1
+        ).grid(row=0, column=2, sticky="ew", padx=(10, 0))
+
+        # -- Cards -------------------------------------------------------------
+        features = ctk.CTkFrame(features_wrapper, fg_color=COLORS.bg_main, corner_radius=0)
+        features.pack(fill="x")
 
         self._feature_card(features, "📊", "3 Modelos",
                            "Absoluto · Cociente · Métodos Estadísticos", 0)
