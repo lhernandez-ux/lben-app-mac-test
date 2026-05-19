@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-mac-intel:
-    runs-on: macos-13-large        # Intel x86_64
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -17,7 +17,6 @@ jobs:
         run: |
           pip install pyinstaller
           pip install -r requirements.txt
-
       - name: Parche scipy
         run: |
           python - <<'EOF'
@@ -44,24 +43,27 @@ jobs:
           else:
               print("No necesito parche")
           EOF
-
       - name: Build con PyInstaller
         run: |
           pyinstaller \
             --name "LBEn_App" \
             --windowed \
             --clean \
-            --collect-all scipy \
             --collect-all statsmodels \
+            --hidden-import scipy \
+            --hidden-import scipy.stats \
+            --hidden-import scipy.stats._distn_infrastructure \
+            --hidden-import scipy.special \
+            --hidden-import scipy.linalg \
+            --hidden-import scipy.optimize \
+            --hidden-import scipy.integrate \
             --add-data "assets:assets" \
             --add-data "data:data" \
             main.py
-
       - name: Crear .dmg
         run: |
           pip install dmgbuild
           dmgbuild -s dmg_settings.py "LBEn App" LBEn_App.dmg
-
       - name: Subir instalador Intel
         uses: actions/upload-artifact@v4
         with:
@@ -69,7 +71,7 @@ jobs:
           path: LBEn_App.dmg
 
   build-mac-arm:
-    runs-on: macos-14        # Apple Silicon arm64
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -80,7 +82,6 @@ jobs:
         run: |
           pip install pyinstaller
           pip install -r requirements.txt
-
       - name: Parche scipy
         run: |
           python - <<'EOF'
@@ -107,7 +108,6 @@ jobs:
           else:
               print("No necesito parche")
           EOF
-
       - name: Build con PyInstaller
         run: |
           pyinstaller \
@@ -119,12 +119,10 @@ jobs:
             --add-data "assets:assets" \
             --add-data "data:data" \
             main.py
-
       - name: Crear .dmg
         run: |
           pip install dmgbuild
           dmgbuild -s dmg_settings.py "LBEn App" LBEn_App.dmg
-
       - name: Subir instalador Apple Silicon
         uses: actions/upload-artifact@v4
         with:
