@@ -3,73 +3,20 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+
 jobs:
-  build-mac:
-    runs-on: macos-latest
-    
+  build-mac-intel:
+    runs-on: macos-12
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
       - name: Install dependencies
         run: |
           pip install pyinstaller
           pip install -r requirements.txt
-
-      - name: Forzar Pillow universal2
-        run: |
-          pip uninstall pillow -y
-
-          # Descargar wheels para ambas arquitecturas
-          pip download --only-binary=:all: --platform macosx_10_10_x86_64 \
-            --python-version 311 --implementation cp pillow -d /tmp/pillow_x86
-          pip download --only-binary=:all: --platform macosx_11_0_arm64 \
-            --python-version 311 --implementation cp pillow -d /tmp/pillow_arm
-
-          # Extraer ambos wheels
-          mkdir -p /tmp/pillow_x86_ext /tmp/pillow_arm_ext
-          unzip -q /tmp/pillow_x86/*.whl -d /tmp/pillow_x86_ext
-          unzip -q /tmp/pillow_arm/*.whl -d /tmp/pillow_arm_ext
-
-          # Combinar .so con lipo
-          find /tmp/pillow_x86_ext -name "*.so" | while read f; do
-            rel="${f#/tmp/pillow_x86_ext/}"
-            arm_f="/tmp/pillow_arm_ext/$rel"
-            if [ -f "$arm_f" ]; then
-              echo "Combinando: $rel"
-              lipo -create "$f" "$arm_f" -output "$f"
-            fi
-          done
-
-          # Instalar usando Python para obtener el site-packages correcto
-          python - <<'PYEOF'
-          import site, shutil, glob, os
-
-          dest = site.getsitepackages()[0]
-          src  = "/tmp/pillow_x86_ext"
-
-          # Copiar PIL/
-          pil_src = os.path.join(src, "PIL")
-          pil_dst = os.path.join(dest, "PIL")
-          if os.path.exists(pil_dst):
-              shutil.rmtree(pil_dst)
-          shutil.copytree(pil_src, pil_dst)
-          print(f"PIL copiado a {pil_dst}")
-
-          # Copiar .dist-info (buscar con glob exacto)
-          for info_dir in glob.glob(os.path.join(src, "*.dist-info")):
-              name = os.path.basename(info_dir)
-              dst_info = os.path.join(dest, name)
-              if os.path.exists(dst_info):
-                  shutil.rmtree(dst_info)
-              shutil.copytree(info_dir, dst_info)
-              print(f"dist-info copiado: {name}")
-          PYEOF
-
       - name: Parche scipy
         run: |
           python - <<'EOF'
@@ -96,27 +43,88 @@ jobs:
           else:
               print("No necesito parche")
           EOF
-
-      - name: Build con PyInstaller (universal2)
+      - name: Build con PyInstaller
         run: |
           pyinstaller \
             --name "LBEn_App" \
             --windowed \
             --clean \
-            --target-arch universal2 \
+            --collect-all statsmodels \
+            --hidden-import scipy \
+            --hidden-import scipy.stats \
+            --hidden-import scipy.stats._distn_infrastructure \
+            --hidden-import scipy.special \
+            --hidden-import scipy.linalg \
+            --hidden-import scipy.optimize \
+            --hidden-import scipy.integrate \
+            --add-data "assets:assets" \
+            --add-data "data:data" \
+            main.py
+      - name: Crear .dmg
+        run: |
+          pip install dmgbuild
+          dmgbuild -s dmg_settings.py "LBEn App" LBEn_App.dmg
+      - name: Subir instalador Intel
+        uses: actions/upload-artifact@v4
+        with:
+          name: LBEn_App-mac-intel
+          path: LBEn_App.dmg
+
+  build-mac-arm:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+      - name: Parche scipy
+        run: |
+          python - <<'EOF'
+          import scipy.stats._distn_infrastructure as f
+          import pathlib
+          path = pathlib.Path(f.__file__)
+          code = path.read_text()
+          old = (
+              "for obj in [s for s in dir() if s.startswith('_doc_')]:\n"
+              "    exec('del ' + obj)\n"
+              "del obj"
+          )
+          new = (
+              "for obj in [s for s in dir() if s.startswith('_doc_')]:\n"
+              "    exec('del ' + obj)\n"
+              "try:\n"
+              "    del obj\n"
+              "except NameError:\n"
+              "    pass"
+          )
+          if old in code:
+              path.write_text(code.replace(old, new))
+              print("Parche aplicado OK")
+          else:
+              print("No necesito parche")
+          EOF
+      - name: Build con PyInstaller
+        run: |
+          pyinstaller \
+            --name "LBEn_App" \
+            --windowed \
+            --clean \
             --collect-all scipy \
             --collect-all statsmodels \
             --add-data "assets:assets" \
             --add-data "data:data" \
             main.py
-
       - name: Crear .dmg
         run: |
           pip install dmgbuild
           dmgbuild -s dmg_settings.py "LBEn App" LBEn_App.dmg
-
-      - name: Subir instalador
+      - name: Subir instalador Apple Silicon
         uses: actions/upload-artifact@v4
         with:
-          name: LBEn_App-mac
+          name: LBEn_App-mac-arm
           path: LBEn_App.dmg
