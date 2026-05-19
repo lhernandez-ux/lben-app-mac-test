@@ -23,29 +23,52 @@ jobs:
       - name: Forzar Pillow universal2
         run: |
           pip uninstall pillow -y
-          # Descargar wheels para ambas arquitecturas y combinarlas con lipo
+
+          # Descargar wheels para ambas arquitecturas
           pip download --only-binary=:all: --platform macosx_10_10_x86_64 \
             --python-version 311 --implementation cp pillow -d /tmp/pillow_x86
           pip download --only-binary=:all: --platform macosx_11_0_arm64 \
             --python-version 311 --implementation cp pillow -d /tmp/pillow_arm
 
           # Extraer ambos wheels
-          cd /tmp && mkdir pillow_x86_ext pillow_arm_ext
-          unzip -q pillow_x86/*.whl -d pillow_x86_ext
-          unzip -q pillow_arm/*.whl -d pillow_arm_ext
+          mkdir -p /tmp/pillow_x86_ext /tmp/pillow_arm_ext
+          unzip -q /tmp/pillow_x86/*.whl -d /tmp/pillow_x86_ext
+          unzip -q /tmp/pillow_arm/*.whl -d /tmp/pillow_arm_ext
 
           # Combinar .so con lipo
-          find pillow_x86_ext -name "*.so" | while read f; do
-            rel="${f#pillow_x86_ext/}"
-            arm_f="pillow_arm_ext/$rel"
+          find /tmp/pillow_x86_ext -name "*.so" | while read f; do
+            rel="${f#/tmp/pillow_x86_ext/}"
+            arm_f="/tmp/pillow_arm_ext/$rel"
             if [ -f "$arm_f" ]; then
+              echo "Combinando: $rel"
               lipo -create "$f" "$arm_f" -output "$f"
             fi
           done
 
-          # Instalar la versión combinada
-          cp -r /tmp/pillow_x86_ext/PIL $(python -c "import site; print(site.getsitepackages()[0])")/PIL
-          cp -r /tmp/pillow_x86_ext/Pillow*.dist-info $(python -c "import site; print(site.getsitepackages()[0])")/
+          # Instalar usando Python para obtener el site-packages correcto
+          python - <<'PYEOF'
+          import site, shutil, glob, os
+
+          dest = site.getsitepackages()[0]
+          src  = "/tmp/pillow_x86_ext"
+
+          # Copiar PIL/
+          pil_src = os.path.join(src, "PIL")
+          pil_dst = os.path.join(dest, "PIL")
+          if os.path.exists(pil_dst):
+              shutil.rmtree(pil_dst)
+          shutil.copytree(pil_src, pil_dst)
+          print(f"PIL copiado a {pil_dst}")
+
+          # Copiar .dist-info (buscar con glob exacto)
+          for info_dir in glob.glob(os.path.join(src, "*.dist-info")):
+              name = os.path.basename(info_dir)
+              dst_info = os.path.join(dest, name)
+              if os.path.exists(dst_info):
+                  shutil.rmtree(dst_info)
+              shutil.copytree(info_dir, dst_info)
+              print(f"dist-info copiado: {name}")
+          PYEOF
 
       - name: Parche scipy
         run: |
