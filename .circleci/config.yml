@@ -23,7 +23,7 @@ jobs:
       - run:
           name: Parche scipy
           command: |
-            python3.11 - <<'EOF'
+            python3.11 - \<<'EOF'
             import scipy.stats._distn_infrastructure as f
             import pathlib
             path = pathlib.Path(f.__file__)
