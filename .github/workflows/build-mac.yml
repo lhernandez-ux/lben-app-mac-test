@@ -1,0 +1,73 @@
+name: Build macOS installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Parche scipy
+        run: |
+          python - <<'EOF'
+          import scipy.stats._distn_infrastructure as f
+          import pathlib
+          path = pathlib.Path(f.__file__)
+          code = path.read_text()
+          old = (
+              "for obj in [s for s in dir() if s.startswith('_doc_')]:\n"
+              "    exec('del ' + obj)\n"
+              "del obj"
+          )
+          new = (
+              "for obj in [s for s in dir() if s.startswith('_doc_')]:\n"
+              "    exec('del ' + obj)\n"
+              "try:\n"
+              "    del obj\n"
+              "except NameError:\n"
+              "    pass"
+          )
+          if old in code:
+              path.write_text(code.replace(old, new))
+              print("Parche aplicado OK")
+          else:
+              print("No necesito parche")
+          EOF
+
+      - name: Build con PyInstaller
+        run: |
+          pyinstaller \
+            --name "LBEn_App" \
+            --windowed \
+            --clean \
+            --collect-all scipy \
+            --collect-all statsmodels \
+            --add-data "assets:assets" \
+            --add-data "data:data" \
+            main.py
+
+      - name: Crear .dmg
+        run: |
+          pip install dmgbuild
+          dmgbuild -s dmg_settings.py "LBEn App" LBEn_App.dmg
+
+      - name: Subir instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: LBEn_App-mac
+          path: LBEn_App.dmg
