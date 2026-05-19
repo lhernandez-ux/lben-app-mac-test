@@ -8,7 +8,7 @@ on:
 jobs:
   build-mac:
     runs-on: macos-latest
-
+    
     steps:
       - uses: actions/checkout@v4
 
@@ -49,12 +49,13 @@ jobs:
               print("No necesito parche")
           EOF
 
-      - name: Build con PyInstaller
+      - name: Build con PyInstaller (universal)
         run: |
           pyinstaller \
             --name "LBEn_App" \
             --windowed \
             --clean \
+            --target-arch universal2 \
             --collect-all scipy \
             --collect-all statsmodels \
             --add-data "assets:assets" \
