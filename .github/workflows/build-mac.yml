@@ -1,26 +1,51 @@
 name: Build macOS installer
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
 jobs:
   build-mac:
     runs-on: macos-latest
     
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
+      
       - name: Install dependencies
         run: |
           pip install pyinstaller
           pip install -r requirements.txt
+
+      - name: Forzar Pillow universal2
+        run: |
+          pip uninstall pillow -y
+          # Descargar wheels para ambas arquitecturas y combinarlas con lipo
+          pip download --only-binary=:all: --platform macosx_10_10_x86_64 \
+            --python-version 311 --implementation cp pillow -d /tmp/pillow_x86
+          pip download --only-binary=:all: --platform macosx_11_0_arm64 \
+            --python-version 311 --implementation cp pillow -d /tmp/pillow_arm
+
+          # Extraer ambos wheels
+          cd /tmp && mkdir pillow_x86_ext pillow_arm_ext
+          unzip -q pillow_x86/*.whl -d pillow_x86_ext
+          unzip -q pillow_arm/*.whl -d pillow_arm_ext
+
+          # Combinar .so con lipo
+          find pillow_x86_ext -name "*.so" | while read f; do
+            rel="${f#pillow_x86_ext/}"
+            arm_f="pillow_arm_ext/$rel"
+            if [ -f "$arm_f" ]; then
+              lipo -create "$f" "$arm_f" -output "$f"
+            fi
+          done
+
+          # Instalar la versión combinada
+          cp -r /tmp/pillow_x86_ext/PIL $(python -c "import site; print(site.getsitepackages()[0])")/PIL
+          cp -r /tmp/pillow_x86_ext/Pillow*.dist-info $(python -c "import site; print(site.getsitepackages()[0])")/
 
       - name: Parche scipy
         run: |
@@ -49,7 +74,7 @@ jobs:
               print("No necesito parche")
           EOF
 
-      - name: Build con PyInstaller (universal)
+      - name: Build con PyInstaller (universal2)
         run: |
           pyinstaller \
             --name "LBEn_App" \
