@@ -115,6 +115,21 @@ class HomePage(ctk.CTkFrame):
 
         ctk.CTkButton(
             top_row,
+            text="📄 Licencia",
+            font=(FONTS.family, FONTS.size_sm, "bold"),
+            fg_color=COLORS.bg_card,
+            text_color=COLORS.primary,
+            hover_color=COLORS.border,
+            border_width=1,
+            border_color=COLORS.border,
+            corner_radius=DIMS.button_radius,
+            width=130,
+            height=32,
+            command=self._abrir_licencia
+        ).pack(side="right", padx=(0, 8))
+
+        ctk.CTkButton(
+            top_row,
             text="📖 Guía de Usuario",
             font=(FONTS.family, FONTS.size_sm, "bold"),
             fg_color=COLORS.accent,
@@ -337,3 +352,67 @@ class HomePage(ctk.CTkFrame):
             height=38,
             command=boton_cmd
         ).pack(pady=(0, 20), padx=24, fill="x")
+
+    def _abrir_licencia(self):
+        # Ruta al archivo — ajusta el nombre si es diferente
+        ruta = resource_path(os.path.join("assets", "licencia.txt"))
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Licencia de Uso")
+        dialog.geometry("600x480")
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        dialog.transient(self.app)
+
+        # Fondo
+        ctk.CTkFrame(dialog, fg_color=COLORS.bg_main, corner_radius=0).place(relwidth=1, relheight=1)
+
+        # Título
+        ctk.CTkLabel(
+            dialog,
+            text="📄  Licencia de Uso",
+            font=(FONTS.family, FONTS.size_lg, "bold"),
+            text_color=COLORS.primary
+        ).pack(pady=(20, 8))
+
+        ctk.CTkFrame(dialog, fg_color=COLORS.border, height=1).pack(fill="x", padx=24)
+
+        # Textbox scrolleable
+        textbox = ctk.CTkTextbox(
+            dialog,
+            font=(FONTS.family, FONTS.size_xs),
+            text_color=COLORS.text_secondary,
+            fg_color=COLORS.bg_card,
+            border_color=COLORS.border,
+            border_width=1,
+            corner_radius=DIMS.card_radius,
+            wrap="word",
+            activate_scrollbars=True
+        )
+        textbox.pack(fill="both", expand=True, padx=24, pady=12)
+
+        # Leer e insertar el contenido
+        try:
+            with open(ruta, "r", encoding="utf-8") as f:
+                contenido = f.read()
+            textbox.insert("end", contenido)
+        except FileNotFoundError:
+            textbox.insert("end", f"⚠️  No se encontró el archivo:\n{ruta}")
+        except Exception as e:
+            textbox.insert("end", f"⚠️  Error al leer el archivo:\n{e}")
+
+        textbox.configure(state="disabled")  # Solo lectura
+
+        # Botón cerrar
+        ctk.CTkButton(
+            dialog,
+            text="Cerrar",
+            font=(FONTS.family, FONTS.size_sm, "bold"),
+            fg_color=COLORS.primary,
+            text_color=COLORS.text_white,
+            hover_color=COLORS.accent,
+            corner_radius=DIMS.button_radius,
+            width=120,
+        height=36,
+        command=dialog.destroy
+    ).pack(pady=(0, 20))
